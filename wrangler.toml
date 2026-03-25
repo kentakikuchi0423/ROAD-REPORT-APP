@@ -1,0 +1,35 @@
+name = "ozu-road-report"
+main = "src/app/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# ローカル開発用のポート設定
+[dev]
+port = 8787
+local_protocol = "http"
+
+# D1 データベース
+# database_id は `wrangler d1 create ozu-road-report-db` 実行後に設定する
+[[d1_databases]]
+binding = "DB"
+database_name = "ozu-road-report-db"
+database_id = "TODO: wrangler d1 create で取得"
+
+# R2 バケット（Step 6 で設定予定）
+# [[r2_buckets]]
+# binding = "IMAGES"
+# bucket_name = "ozu-road-report-images"
+
+# 環境変数（.dev.vars または Cloudflare Dashboard で設定）
+# LINE_CHANNEL_SECRET = ""
+# LINE_CHANNEL_ACCESS_TOKEN = ""
+# ADMIN_USERNAME = ""
+# ADMIN_PASSWORD_HASH = ""
+
+[env.production]
+name = "ozu-road-report-prod"
+# 本番環境の設定はここに追記する
+
+[env.staging]
+name = "ozu-road-report-staging"
+# ステージング環境の設定はここに追記する

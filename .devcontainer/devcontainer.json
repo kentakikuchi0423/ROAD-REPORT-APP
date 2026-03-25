@@ -1,0 +1,35 @@
+{
+  "name": "ozu-road-report-app",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+
+  "forwardPorts": [8787],
+  "portsAttributes": {
+    "8787": {
+      "label": "Wrangler Dev Server",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "postCreateCommand": "corepack enable && corepack prepare pnpm@10 --activate && npm install -g wrangler",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-typescript-next"
+      ],
+      "settings": {
+        "editor.defaultFormatter": null,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "js/ts.tsdk.path": "node_modules/typescript/lib",
+        "js/ts.tsdk.promptToUseWorkspaceVersion": true
+      }
+    }
+  },
+
+  "remoteUser": "node"
+}
