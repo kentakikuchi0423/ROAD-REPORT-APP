@@ -138,14 +138,105 @@ LINE Messaging API の Webhook エンドポイントを実装した（2026-03-25
 
 会話状態の管理ロジックと入力収集フローを実装する。
 
-- [ ] 会話状態機械（State Machine）設計
-- [ ] 各ステップのハンドラ実装
-  - [ ] 利用同意・プライバシーポリシー提示
-  - [ ] 近景写真受付
-  - [ ] 遠景写真受付
-  - [ ] 位置情報受付
-  - [ ] 任意情報入力（撮影日付・補足・氏名・電話番号）
-- [ ] エラーハンドリング・再試行メッセージ
+- [ ] 利用同意・プライバシーポリシー提示（後のStep）
+- [x] 近景写真受付（Step 5a: 2026-03-25）
+- [x] 遠景写真受付（Step 5a: 2026-03-25）
+- [x] 位置情報受付（Step 5b: 2026-03-25）
+- [x] 任意情報入力（撮影日付・補足・氏名・電話番号）（Step 5c: 2026-03-25）
+- [x] 画像以外が来た場合の再案内メッセージ
+
+---
+
+## Step 5a: 近景・遠景写真回収フロー ✅
+
+近景→遠景写真の収集、R2 即時保存、セッション管理を実装した（2026-03-25）。
+
+- [x] 会話フロー State Machine 作成（src/app/conversation.ts）
+  - セッションなし + 「通報する」→ close_photo ステップ開始
+  - close_photo: 画像受信 → LINE Content API → R2 保存 → far_photo へ
+  - far_photo: 画像受信 → LINE Content API → R2 保存 → location へ（次 Step）
+  - 画像以外（テキスト等）→ 再案内メッセージ
+  - sticker 等未対応種別 → 返信なし
+- [x] R2 uploadImage 実装（src/lib/r2.ts）
+- [x] getMessageContent 返値に contentType 追加（src/lib/line.ts）
+- [x] Env に IMAGES: R2Bucket 追加（src/types.ts）
+- [x] ConversationSession.data を reportUuid / closePhotoKey / farPhotoKey に更新（src/types.ts）
+- [x] wrangler.toml R2 バインディング有効化
+- [x] webhook.ts スタブを conversation.ts に接続
+- [x] テスト追加（tests/app/conversation.test.ts: 11 テスト）
+- [x] テスト更新（tests/lib/line.test.ts / tests/app/routing.test.ts / tests/lib/db.test.ts）
+
+### 採用判断メモ
+
+- R2 キー形式: `reports/{YYYYMMDD}/{uuid}/{type}.jpg`（JST基準、lineUserId をキーに含めない）
+- UUID は近景受信時に生成し、遠景は同一 UUID を流用（1通報 = 1ディレクトリ）
+- 画像はリプライ前に即時 R2 保存（「できるだけ早く保存する」方針）
+- 利用同意ステップは後のStep で実装（現時点は「通報する」テキストで直接 close_photo へ）
+
+---
+
+## Step 5b: 位置情報受付フロー ✅
+
+位置情報メッセージの収集とセッション保存を実装した（2026-03-25）。
+
+- [x] location ステップのハンドラ実装（src/app/conversation.ts）
+  - 位置情報受信 → latitude / longitude / address をセッションに保存 → shooting_date ステップへ
+  - address が null の場合は locationAddress を保存しない
+  - 位置情報以外（テキスト・画像等）→ 再案内メッセージ
+- [x] テスト追加（tests/app/conversation.test.ts: +4 テスト、計 15 テスト）
+
+### 採用判断メモ
+
+- LINE 位置情報の address フィールドは null になる場合がある（座標のみ選択時）→ 存在する場合のみ保存
+- shooting_date ステップへの遷移メッセージは任意・スキップ可の説明を含む
+
+---
+
+## Step 5c: 任意情報入力フロー ✅
+
+shooting_date / remarks / reporter_name / reporter_phone の 4 ステップを実装した（2026-03-25）。
+
+- [x] handleOptionalTextStep 共通ヘルパー実装（src/app/conversation.ts）
+  - テキスト以外 → MSG_RETRY_TEXT_OR_SKIP 返信
+  - 「スキップ」 → フィールド保存なし + 次ステップへ
+  - 有効なテキスト → バリデーション通過 + 保存 + 次ステップへ
+  - バリデーション失敗 → エラーメッセージ返信（セッション更新なし）
+- [x] shooting_date ステップ（validateShootingDate / → remarks）
+- [x] remarks ステップ（validateRemarks / → reporter_name）
+- [x] reporter_name ステップ（validateReporterName / → reporter_phone）
+- [x] reporter_phone ステップ（validateReporterPhone / → confirming）
+- [x] テスト追加（tests/app/conversation.test.ts: +16 テスト、計 31 テスト）
+
+### 採用判断メモ
+
+- 4 ステップは同一パターンなので `handleOptionalTextStep` に共通化（コード重複を回避）
+- テストは `testOptionalStep` ヘルパー関数でパターンを共有（4 ステップ × 4 ケース = 16 テスト）
+- バリデーション関数は既存の `src/lib/validation.ts` を再利用
+- confirming ステップのメッセージ（MSG_REQUEST_CONFIRMING）は仮定義。次 Step で確認フロー実装時に詳細を追加
+
+---
+
+## Step 5d: 確認・送信フロー ✅
+
+confirming ステップ（「送信する」/「やり直す」）と受付番号発行を実装した（2026-03-25）。
+
+- [x] handleConfirmingStep 実装（src/app/conversation.ts）
+  - 「送信する」→ 必須フィールド確認 → insertReport → deleteSession → 受付番号を含む完了メッセージ
+  - 「やり直す」→ deleteSession → 再開案内メッセージ
+  - その他テキスト・画像等 → 「送信する / やり直す」案内（セッション変更なし）
+  - 必須フィールド欠損時 → deleteSession + エラーメッセージ（insertReport 呼ばず）
+- [x] buildSummaryMessage 実装（reporter_phone → confirming 遷移時に入力内容サマリーを表示）
+- [x] buildCompletionMessage 実装（受付番号を含む完了メッセージ）
+- [x] handleOptionalTextStep の nextMsg を string | 関数 に拡張（サマリー動的生成のため）
+- [x] テスト追加（tests/app/conversation.test.ts: +7 テスト、計 38 テスト）
+
+### 採用判断メモ
+
+- 「やり直す」はセッション削除のみ（consent ステップ未実装のため「通報する」で再開案内）
+  - consent 実装時は consent ステップへ戻す形に変更予定
+- 必須フィールド欠損はあり得ないケースだが、防御的チェックとしてセッション削除 + エラーメッセージを返す
+- サマリーは buildSummaryMessage で生成（reporter_phone の nextMsg に関数を渡す形で統一）
+- insertReport は既存の D1 ヘルパー（UNIQUE制約リトライ付き）を使用
 
 ---
 
@@ -153,20 +244,20 @@ LINE Messaging API の Webhook エンドポイントを実装した（2026-03-25
 
 受信した写真・位置情報を R2 に保存する処理を実装する。
 
-- [ ] 画像ファイル受信・R2 保存
-- [ ] R2 バインディング設定
-- [ ] 位置情報のパース・保存
-- [ ] 署名付き URL 生成
+- [x] 画像ファイル受信・R2 保存（Step 5a で実装済み）
+- [x] R2 バインディング設定（Step 5a で実装済み）
+- [x] 位置情報のパース・保存（Step 5b で実装済み）
+- [ ] 署名付き URL 生成（管理画面実装時）
 
 ---
 
-## Step 7: 受付番号発行・通報完了処理
+## Step 7: 受付番号発行・通報完了処理 ✅
 
-通報完了時の受付番号発行と D1 への保存処理を実装する。
+通報完了時の受付番号発行と D1 への保存処理を実装した（Step 3 / Step 5d で実装済み）。
 
-- [ ] 受付番号生成ロジック（OZU-YYYYMMDD-NNN 形式）
-- [ ] reports テーブルへの登録
-- [ ] 完了メッセージ返送
+- [x] 受付番号生成ロジック（OZU-YYYYMMDD-NNN 形式）→ Step 3 で実装（generateReceiptNumber / getNextDailySequence）
+- [x] reports テーブルへの登録 → Step 5d で実装（insertReport、UNIQUE制約リトライ付き）
+- [x] 完了メッセージ返送 → Step 5d で実装（buildCompletionMessage）
 
 ---
 

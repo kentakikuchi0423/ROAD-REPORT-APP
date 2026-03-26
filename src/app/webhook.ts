@@ -16,6 +16,7 @@
 import type { webhook } from "@line/bot-sdk";
 import type { Env } from "../types";
 import { verifySignature, replyMessage } from "../lib/line";
+import { handleConversationMessage } from "./conversation";
 
 // ---- エントリポイント -------------------------------------------------------
 
@@ -121,36 +122,11 @@ async function routeMessageEvent(
     `[webhook] message event type=${msgType} id=${event.webhookEventId}`,
   );
 
-  switch (msgType) {
-    case "text":
-      await handleTextMessage(
-        event as webhook.MessageEvent & { message: webhook.TextMessageContent },
-        env,
-      );
-      break;
-
-    case "image":
-      await handleImageMessage(
-        event as webhook.MessageEvent & {
-          message: webhook.ImageMessageContent;
-        },
-        env,
-      );
-      break;
-
-    case "location":
-      await handleLocationMessage(
-        event as webhook.MessageEvent & {
-          message: webhook.LocationMessageContent;
-        },
-        env,
-      );
-      break;
-
-    default:
-      // 未対応メッセージ種別：返信なし・ログのみ
-      console.log(`[webhook] unsupported message type=${msgType}`);
-      break;
+  if (msgType === "text" || msgType === "image" || msgType === "location") {
+    await handleConversationMessage(event, userId, env);
+  } else {
+    // 未対応メッセージ種別（sticker 等）：返信なし・ログのみ
+    console.log(`[webhook] unsupported message type=${msgType}`);
   }
 }
 
@@ -166,59 +142,9 @@ function extractUserId(event: webhook.Event): string | null {
     : null;
 }
 
-// ---- スタブハンドラ（Step 5 で会話フローに置き換え予定） --------------------
-
-/**
- * テキストメッセージ受信時の処理。
- * Step 5 で会話状態機械に委譲する実装に置き換える。
- */
-async function handleTextMessage(
-  event: webhook.MessageEvent & { message: webhook.TextMessageContent },
-  env: Env,
-): Promise<void> {
-  if (!event.replyToken) return;
-  await replyMessage(
-    event.replyToken,
-    [{ type: "text", text: "メッセージを受け付けました（通報フローは準備中です）" }],
-    env.LINE_CHANNEL_ACCESS_TOKEN,
-  );
-}
-
-/**
- * 画像メッセージ受信時の処理。
- * Step 5/6 で R2 保存フローに置き換える。
- */
-async function handleImageMessage(
-  event: webhook.MessageEvent & { message: webhook.ImageMessageContent },
-  env: Env,
-): Promise<void> {
-  if (!event.replyToken) return;
-  await replyMessage(
-    event.replyToken,
-    [{ type: "text", text: "写真を受け付けました（通報フローは準備中です）" }],
-    env.LINE_CHANNEL_ACCESS_TOKEN,
-  );
-}
-
-/**
- * 位置情報メッセージ受信時の処理。
- * Step 5 で位置情報収集フローに置き換える。
- */
-async function handleLocationMessage(
-  event: webhook.MessageEvent & { message: webhook.LocationMessageContent },
-  env: Env,
-): Promise<void> {
-  if (!event.replyToken) return;
-  await replyMessage(
-    event.replyToken,
-    [{ type: "text", text: "位置情報を受け付けました（通報フローは準備中です）" }],
-    env.LINE_CHANNEL_ACCESS_TOKEN,
-  );
-}
-
 /**
  * フォローイベント受信時の処理。
- * Step 5 でウェルカムメッセージ + 同意フロー起動に置き換える。
+ * Step 5b（同意フロー実装時）でウェルカムメッセージ + 同意フロー起動に置き換える。
  */
 async function handleFollowEvent(
   event: webhook.FollowEvent,

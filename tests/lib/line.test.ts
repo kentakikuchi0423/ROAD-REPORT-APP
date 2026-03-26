@@ -108,10 +108,13 @@ describe("getMessageContent", () => {
     vi.unstubAllGlobals();
   });
 
-  it("正しいエンドポイントで fetch を呼び出し ArrayBuffer を返す", async () => {
+  it("正しいエンドポイントで fetch を呼び出し data と contentType を返す", async () => {
     const fakeBuffer = new ArrayBuffer(8);
     const mockFetch = vi.fn().mockResolvedValue(
-      new Response(fakeBuffer, { status: 200 }),
+      new Response(fakeBuffer, {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      }),
     );
     vi.stubGlobal("fetch", mockFetch);
 
@@ -127,7 +130,19 @@ describe("getMessageContent", () => {
     expect((init.headers as Record<string, string>)["Authorization"]).toBe(
       `Bearer ${accessToken}`,
     );
-    expect(result).toBeInstanceOf(ArrayBuffer);
+    expect(result.data).toBeInstanceOf(ArrayBuffer);
+    expect(result.contentType).toBe("image/jpeg");
+  });
+
+  it("content-type ヘッダーなしの場合は image/jpeg を返す", async () => {
+    const fakeBuffer = new ArrayBuffer(4);
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(fakeBuffer, { status: 200 }),
+    );
+    vi.stubGlobal("fetch", mockFetch);
+
+    const result = await getMessageContent("msg-no-ct", "token");
+    expect(result.contentType).toBe("image/jpeg");
   });
 
   it("非 2xx レスポンスはエラーを throw する", async () => {

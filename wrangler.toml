@@ -15,10 +15,10 @@ binding = "DB"
 database_name = "ozu-road-report-db"
 database_id = "TODO: wrangler d1 create で取得"
 
-# R2 バケット（Step 6 で設定予定）
-# [[r2_buckets]]
-# binding = "IMAGES"
-# bucket_name = "ozu-road-report-images"
+# R2 バケット（bucket_name は `wrangler r2 bucket create ozu-road-report-images` 実行後に確認）
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "ozu-road-report-images"
 
 # 環境変数（.dev.vars または Cloudflare Dashboard で設定）
 # LINE_CHANNEL_SECRET = ""

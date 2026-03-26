@@ -25,12 +25,23 @@ async function computeSignature(body: string, secret: string): Promise<string> {
 const TEST_SECRET = "test-channel-secret";
 const TEST_TOKEN = "test-access-token";
 
+/** セッションを返さない D1 モック（セッションなし状態をデフォルトとする） */
+const mockDb = {
+  prepare: vi.fn().mockReturnValue({
+    bind: vi.fn().mockReturnValue({
+      first: vi.fn().mockResolvedValue(null),
+      run: vi.fn().mockResolvedValue({ success: true, results: [], meta: {} }),
+    }),
+  }),
+} as unknown as D1Database;
+
 const mockEnv: Env = {
   LINE_CHANNEL_SECRET: TEST_SECRET,
   LINE_CHANNEL_ACCESS_TOKEN: TEST_TOKEN,
   ADMIN_USERNAME: "admin",
   ADMIN_PASSWORD_HASH: "hash",
-  DB: {} as D1Database,
+  DB: mockDb,
+  IMAGES: {} as R2Bucket,
 };
 
 const mockCtx = {

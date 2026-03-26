@@ -89,15 +89,15 @@ export async function replyMessage(
 
 /**
  * LINE コンテンツ API から画像などのバイナリを取得する。
- * Step 6 で画像保存時に使用する。
  *
  * @param messageId   LINE メッセージ ID
  * @param accessToken LINE チャンネルアクセストークン
+ * @returns バイナリデータと MIME タイプ
  */
 export async function getMessageContent(
   messageId: string,
   accessToken: string,
-): Promise<ArrayBuffer> {
+): Promise<{ data: ArrayBuffer; contentType: string }> {
   const res = await fetch(
     `https://api-data.line.me/v2/bot/message/${messageId}/content`,
     {
@@ -111,5 +111,7 @@ export async function getMessageContent(
     throw new Error(`getMessageContent failed: ${String(res.status)}`);
   }
 
-  return res.arrayBuffer();
+  const contentType = res.headers.get("content-type") ?? "image/jpeg";
+  const data = await res.arrayBuffer();
+  return { data, contentType };
 }

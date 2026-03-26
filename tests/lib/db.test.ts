@@ -96,7 +96,8 @@ describe("getNextDailySequence", () => {
 describe("getSession", () => {
   it("セッションが存在する場合は ConversationSession を返す", async () => {
     const sessionData = {
-      closePhotoMessageId: "msg-001",
+      reportUuid: "test-uuid-001",
+      closePhotoKey: "reports/20260325/test-uuid-001/close.jpg",
     };
     const row = {
       line_user_id: "U123",
@@ -117,7 +118,7 @@ describe("getSession", () => {
     expect(session).not.toBeNull();
     expect(session?.lineUserId).toBe("U123");
     expect(session?.step).toBe("far_photo");
-    expect(session?.data.closePhotoMessageId).toBe("msg-001");
+    expect(session?.data.closePhotoKey).toBe("reports/20260325/test-uuid-001/close.jpg");
   });
 
   it("セッションが存在しない場合は null を返す", async () => {

@@ -1,28 +1,34 @@
 /**
- * Cloudflare R2 ストレージヘルパー（プレースホルダ）
- *
- * Step 6 で実装予定:
- *   - 画像ファイルのアップロード
- *   - 署名付き URL 生成
- *   - 画像ダウンロード
+ * Cloudflare R2 ストレージヘルパー
  */
 
-/** 画像を R2 に保存してキーを返す */
-export function uploadImage(
-  _bucket: R2Bucket,
-  _key: string,
-  _data: ArrayBuffer,
-  _contentType: string,
+/**
+ * 画像を R2 に保存してキーを返す。
+ *
+ * @param bucket      R2 バケット
+ * @param key         保存先キー（例: "reports/20260325/uuid/close.jpg"）
+ * @param data        画像バイナリ
+ * @param contentType MIME タイプ（例: "image/jpeg"）
+ */
+export async function uploadImage(
+  bucket: R2Bucket,
+  key: string,
+  data: ArrayBuffer,
+  contentType: string,
 ): Promise<string> {
-  // TODO: Step 6 で実装
-  return Promise.reject(new Error("Not implemented"));
+  await bucket.put(key, data, { httpMetadata: { contentType } });
+  return key;
 }
 
-/** R2 から画像を取得する */
-export function downloadImage(
-  _bucket: R2Bucket,
-  _key: string,
+/**
+ * R2 から画像を取得する。存在しない場合は null を返す。
+ *
+ * @param bucket R2 バケット
+ * @param key    取得するキー
+ */
+export async function downloadImage(
+  bucket: R2Bucket,
+  key: string,
 ): Promise<R2ObjectBody | null> {
-  // TODO: Step 6 で実装
-  return Promise.reject(new Error("Not implemented"));
+  return bucket.get(key);
 }

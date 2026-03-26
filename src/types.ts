@@ -15,8 +15,8 @@ export interface Env {
   // D1 データベース
   DB: D1Database;
 
-  // R2 バケット（Step 6 で追加予定）
-  // IMAGES: R2Bucket;
+  // R2 バケット
+  IMAGES: R2Bucket;
 }
 
 /** 道路破損通報のステータス */
@@ -60,8 +60,9 @@ export interface ConversationSession {
   lineUserId: string;
   step: ConversationStep;
   data: Partial<{
-    closePhotoMessageId: string;
-    farPhotoMessageId: string;
+    reportUuid: string; // R2 キーの基盤となる UUID（近景受信時に生成）
+    closePhotoKey: string; // R2 キー（近景）
+    farPhotoKey: string; // R2 キー（遠景）
     latitude: number;
     longitude: number;
     locationAddress: string;
