@@ -24,6 +24,7 @@ import type { ConversationSession, ConversationStep, Env } from "../types";
 import { getSession, upsertSession, insertReport, deleteSession } from "../lib/db";
 import { replyMessage, getMessageContent } from "../lib/line";
 import { uploadImage } from "../lib/r2";
+import { createAdminNotifier } from "../lib/notification";
 import {
   validateShootingDate,
   validateRemarks,
@@ -39,21 +40,25 @@ const MSG_HOW_TO_START =
 
 /**
  * 利用同意を求めるメッセージ。
- * プライバシーポリシーの URL は本番デプロイ後に追記予定。
+ * プライバシーポリシーの URL は本番デプロイ後に追記予定（TODO: BASE_URL 確定後に差し替え）。
  */
 const MSG_REQUEST_CONSENT = [
   "大洲市道路破損通報サービスへようこそ。",
   "",
-  "通報にあたり、以下の情報を収集します：",
+  "通報にあたり、以下の情報をお預かりします：",
   "・近景写真・遠景写真（必須）",
   "・位置情報（必須）",
   "・撮影日付・補足事項（任意）",
   "・お名前・電話番号（任意、匿名可）",
+  "・LINE ユーザー ID（会話管理のみに使用）",
   "",
   "収集した情報は大洲市の道路修繕対応のみに使用します。",
-  "氏名・電話番号の入力は任意です。匿名での通報も可能です。",
+  "お名前・電話番号の入力は任意で、匿名での通報も可能です。",
   "",
-  "ご同意いただける場合は「同意する」と送信してください。",
+  "プライバシーポリシーは大洲市道路通報サービスのページからご確認いただけます。",
+  "",
+  "内容にご同意いただける場合は「同意する」をタップしてください。",
+  "中止する場合は「キャンセル」をタップしてください。",
 ].join("\n");
 
 /** 同意テキスト以外が届いた場合の再案内 */
@@ -142,10 +147,11 @@ const SKIP_TEXT = "スキップ";
 
 // ---- Quick Reply 定義 --------------------------------------------------------
 
-/** 利用同意 Quick Reply */
+/** 利用同意 Quick Reply（「同意する」「キャンセル」） */
 const QUICK_REPLY_CONSENT = {
   items: [
     { type: "action", action: { type: "message", label: "同意する", text: "同意する" } },
+    { type: "action", action: { type: "message", label: "キャンセル", text: "キャンセル" } },
   ],
 };
 
@@ -670,6 +676,15 @@ async function handleConfirmingStep(
   }
 
   await deleteSession(env.DB, session.lineUserId);
+
+  // 管理者通知（失敗しても通報完了は妨げない）
+  try {
+    const notifier = createAdminNotifier(env);
+    await notifier.notifyNewReport(report);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("admin notification failed:", err instanceof Error ? err.message : String(err));
+  }
 
   await replyMessage(
     replyToken,

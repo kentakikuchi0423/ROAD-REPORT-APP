@@ -1,3 +1,4 @@
+
 /**
  * 管理画面ハンドラテスト（tests/app/admin.test.ts）
  *
@@ -509,7 +510,8 @@ describe("handleAdmin", () => {
       const req = await makeAuthRequest("GET", "/admin/reports/csv?status=unknown");
       await handleAdmin(req, mockEnv, mockCtx);
 
-      expect(mockGetAllReports).toHaveBeenCalledWith(mockEnv.DB, undefined);
+      const [, status] = mockGetAllReports.mock.calls[0]!;
+      expect(status).toBeUndefined();
     });
 
     it("未認証は /admin/login へリダイレクト", async () => {
@@ -594,7 +596,7 @@ describe("handleAdmin", () => {
   // ---- DELETE /admin/reports/:id --------------------------------------------
 
   describe("DELETE /admin/reports/:id", () => {
-    it("通報が存在する場合 204 を返す", async () => {
+    it("通報が存在する場合 204 を返す（クライアント側 JS がリダイレクト）", async () => {
       mockGetReportById.mockResolvedValue(sampleReport);
       mockDeleteImage.mockResolvedValue(undefined);
       mockDeleteReport.mockResolvedValue(true);

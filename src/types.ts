@@ -7,6 +7,8 @@ export interface Env {
   // LINE Messaging API
   LINE_CHANNEL_SECRET: string;
   LINE_CHANNEL_ACCESS_TOKEN: string;
+  /** 管理者通知先の LINE ユーザー ID（任意）。設定すると新規通報時に LINE プッシュ通知を送る */
+  LINE_ADMIN_USER_ID?: string;
 
   // 管理画面認証
   ADMIN_USERNAME: string;

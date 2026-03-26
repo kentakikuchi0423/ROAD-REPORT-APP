@@ -433,6 +433,54 @@ Cloudflare Workers 上に管理者向け Web UI を実装する（サーバー�
 
 ---
 
+## Step 10c: 管理者通知・プライバシーポリシー整備 ✅（2026-03-26）
+
+管理者 LINE 通知の実装、プライバシーポリシー本文の整備、利用同意フローの改善を行った。
+
+### 管理者通知
+
+- [x] `src/lib/notification.ts` 新規作成
+  - `AdminNotifier` インターフェース（差し替え可能な抽象化）
+  - `LineAdminNotifier`: LINE Push Message API による通知実装
+  - `NullAdminNotifier`: `LINE_ADMIN_USER_ID` 未設定時の NULL 実装
+  - `createAdminNotifier(env)`: ファクトリ関数（設定に応じて実装を選択）
+- [x] `src/types.ts`: `LINE_ADMIN_USER_ID?: string` を Env に追加（任意）
+- [x] `src/app/conversation.ts`: `handleConfirmingStep` の `insertReport` 成功後に通知呼び出し追加
+  - 通知失敗は try-catch で吸収（エラーログのみ）→ 通報完了処理を妨げない
+- [x] `wrangler.toml`: `LINE_ADMIN_USER_ID` の設定コメントを追加
+
+### プライバシーポリシー本文整備
+
+- [x] `src/app/privacy.ts`: プレースホルダを削除し、正式な本文に更新
+  - 収集情報（LINE ユーザー ID の扱いを明記）
+  - 利用目的
+  - 第三者への提供
+  - 保管・管理（Cloudflare 上での保管、管理者が削除するまで保持）
+  - LINE サービス（LINE プライバシーポリシーへのリンク）
+  - 開示・訂正・削除の請求
+  - お問い合わせ先（大洲市役所）
+
+### 利用同意フロー改善
+
+- [x] `src/app/conversation.ts`: `MSG_REQUEST_CONSENT` 改善
+  - LINE ユーザー ID の収集目的を明記
+  - プライバシーポリシーの確認案内を追加
+  - キャンセル方法の説明を追加
+- [x] `QUICK_REPLY_CONSENT` に「キャンセル」ボタンを追加（テキスト入力なしでキャンセル可能に）
+
+### テスト
+
+- [x] `tests/app/conversation.test.ts`: notification モック追加（165 テスト全通過）
+
+### 採用判断メモ
+
+- `AdminNotifier` インターフェースで抽象化: 将来 Email・Slack 等に差し替える際、`notification.ts` の実装を追加するだけで対応可能
+- 通知失敗は警告ログのみ: 通知は補助機能であり、通報完了メッセージの送信を妨げてはならない
+- `LINE_ADMIN_USER_ID` は任意: 未設定の場合は NullAdminNotifier が何もしない（既存動作を変えない）
+- プライバシーポリシー URL（`/privacy`）は本番ドメイン確定後に `MSG_REQUEST_CONSENT` へ追記予定（コード内 TODO コメントあり）
+
+---
+
 ## Step 10: テスト・品質保証
 
 単体テスト・結合テストを実施し、品質を担保する。

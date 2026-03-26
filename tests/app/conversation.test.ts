@@ -28,6 +28,12 @@ vi.mock("../../src/lib/r2", () => ({
   uploadImage: vi.fn(),
 }));
 
+vi.mock("../../src/lib/notification", () => ({
+  createAdminNotifier: vi.fn(() => ({
+    notifyNewReport: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+
 const mockGetSession = vi.mocked(getSession);
 const mockUpsertSession = vi.mocked(upsertSession);
 const mockDeleteSession = vi.mocked(deleteSession);

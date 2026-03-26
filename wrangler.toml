@@ -24,6 +24,7 @@ bucket_name = "ozu-road-report-images"
 # 環境変数（.dev.vars または Cloudflare Dashboard で設定）
 # LINE_CHANNEL_SECRET = ""
 # LINE_CHANNEL_ACCESS_TOKEN = ""
+# LINE_ADMIN_USER_ID = ""   # 任意: 管理者の LINE ユーザー ID（設定すると新規通報時に LINE プッシュ通知）
 # ADMIN_USERNAME = ""
 # ADMIN_PASSWORD_HASH = ""  # SHA-256 hex（echo -n "yourpassword" | sha256sum）
 # ADMIN_SESSION_SECRET = "" # ランダムな長い文字列（openssl rand -hex 32 等）
