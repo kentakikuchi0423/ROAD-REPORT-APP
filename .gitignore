@@ -11,6 +11,7 @@ dist/
 .env.local
 .env.*.local
 .dev.vars
+.dev.vars.*
 .claude/settings.local.json
 
 # OS

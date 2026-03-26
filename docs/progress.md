@@ -812,3 +812,45 @@ LINE キャンセル確認フロー・管理画面 UI 統一・写真プレビ�
 - チェックボックスを採用: `<select multiple>` より直感的にタップ・クリックしやすく、モバイルでも操作しやすい
 - テーブルは横スクロール化を選択: カード形式等への変換は実装コストが高く、既存の列構成を維持したまま対応できる横スクロールを優先
 - `@media (max-width: 640px)` ブレークポイント: 一般的なスマートフォン（375px〜430px）をカバー
+
+---
+
+## Step 10f: Pre-production security check ✅（2026-03-26）
+
+本番公開前のシークレット・環境変数・.gitignore の安全確認を実施した。
+
+### 確認結果
+
+| ファイル | 状態 |
+|---|---|
+| `.dev.vars` | `.gitignore` 除外済み、コミット履歴なし ✅ |
+| `.env.example` | git 管理対象だがダミー値のみ ✅ |
+| `.dev.vars.example` | git 管理対象だがプレースホルダのみ ✅ |
+| `wrangler.toml` | シークレット値なし、`database_id` はダミー UUID ✅ |
+| `src/` ソースコード | ハードコードされたシークレットなし ✅ |
+| `docs/checklist.md` | `.dev.vars` 流用禁止の注意書きあり ✅ |
+
+### 修正内容
+
+- [x] `.gitignore`: `.dev.vars.*` を追加（`.dev.vars.backup` / `.dev.vars.prod` 等のバリアントも除外）
+
+### 本番公開前に再生成必須のシークレット一覧
+
+| シークレット | 再生成方法 |
+|---|---|
+| `LINE_CHANNEL_SECRET` | LINE Developers Console → チャンネル設定 → 再発行 |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Developers Console → 長期トークン → 再発行 |
+| `ADMIN_PASSWORD_HASH` | 本番用パスワード決定後 `echo -n "newpass" \| sha256sum` |
+| `ADMIN_SESSION_SECRET` | `openssl rand -hex 32`（64 文字以上） |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Dashboard → API Tokens → 現トークン無効化 → 新規発行 |
+
+### 指摘事項（次フェーズで対応）
+
+- `.env.example` は `ADMIN_SESSION_SECRET` が欠落、`.dev.vars.example` との二重管理で混乱の元
+  → `.env.example` のヘッダーに「wrangler 用は `.dev.vars.example` を参照」の注記追加を推奨
+
+### 採用判断メモ
+
+- `.dev.vars` は開発用として実際の値が設定されているが、git 未追跡のため漏洩リスクなし
+- ただし上記 5 シークレットは本番環境に同じ値を使用してはならない（`wrangler secret put` で別途登録）
+- `CLOUDFLARE_API_TOKEN` は Workers 本番環境では不要（wrangler CLI 認証用のローカル専用）
