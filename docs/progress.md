@@ -287,11 +287,26 @@ confirming ステップ（「送信する」/「やり直す」）と受付番�
 
 ## Step 7: 受付番号発行・通報完了処理 ✅
 
-通報完了時の受付番号発行と D1 への保存処理を実装した（Step 3 / Step 5d で実装済み）。
+通報完了フローを完成させた（2026-03-26）。
 
 - [x] 受付番号生成ロジック（OZU-YYYYMMDD-NNN 形式）→ Step 3 で実装（generateReceiptNumber / getNextDailySequence）
 - [x] reports テーブルへの登録 → Step 5d で実装（insertReport、UNIQUE制約リトライ付き）
-- [x] 完了メッセージ返送 → Step 5d で実装（buildCompletionMessage）
+- [x] 最終確認メッセージ（buildSummaryMessage）と受付完了メッセージ（buildCompletionMessage）→ Step 5d で実装
+- [x] 二重送信ガード: 「送信する」受信後、先に session.step = "completed" に更新してから insertReport を呼ぶ
+  - 並行リクエストが来ても "completed" ステップに分岐し、「受付済み」案内を返す
+- [x] insertReport 失敗時のリカバリー: セッションを "confirming" に戻し、再送を促すエラーメッセージ（Quick Reply 付き）
+- [x] "completed" ステップへのハンドリング追加（MSG_ALREADY_SUBMITTED）
+- [x] テスト追加（tests/app/conversation.test.ts: +3 テスト、計 45 テスト）
+  - 二重送信ガード（completed に更新してから insertReport）テスト
+  - insertReport 失敗時リカバリーテスト
+  - completed ステップへのメッセージ → 受付済み案内テスト
+
+### 採用判断メモ
+
+- 二重送信対策の方式: upsertSession(completed) → insertReport → deleteSession → replyMessage
+  - completed に更新後に insertReport が失敗した場合: upsertSession(confirming) でリカバリー → エラーメッセージ
+  - completed ステップのセッションは正常系ではほぼ瞬間的に deleteSession される
+  - 異常終了時には completed セッションが残るが、その後のメッセージで「受付済み」案内が返る（ループにならない）
 
 ---
 

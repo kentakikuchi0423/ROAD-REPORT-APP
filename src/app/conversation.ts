@@ -125,6 +125,14 @@ const MSG_RETRY_CONFIRMING =
 const MSG_SESSION_ERROR =
   "申し訳ございません。セッションデータに問題が発生したため、通報をリセットしました。\n「通報する」と送信して最初からやり直してください。";
 
+/** 通報送信済み（completed）の場合の案内（二重送信時など） */
+const MSG_ALREADY_SUBMITTED =
+  "この通報はすでに受け付け済みです。\n別の通報を行う場合は「通報する」と送信してください。";
+
+/** insertReport 失敗時の一時エラーメッセージ */
+const MSG_SUBMIT_ERROR =
+  "申し訳ございません。送信処理中にエラーが発生しました。\nもう一度「送信する」をタップしてお試しください。";
+
 /** 任意テキスト入力ステップで、テキスト以外が届いた場合の共通案内 */
 const MSG_RETRY_TEXT_OR_SKIP =
   "テキストで入力するか、「スキップ」をタップ（または送信）してください。";
@@ -261,6 +269,15 @@ export async function handleConversationMessage(
 
     case "confirming":
       await handleConfirmingStep(event, session, env, replyToken);
+      break;
+
+    case "completed":
+      // 送信処理中または二重送信。受付済みの旨を案内するのみ。
+      await replyMessage(
+        replyToken,
+        [{ type: "text", text: MSG_ALREADY_SUBMITTED }],
+        env.LINE_CHANNEL_ACCESS_TOKEN,
+      );
       break;
 
     default:
@@ -611,20 +628,46 @@ async function handleConfirmingStep(
     return;
   }
 
+  // 二重送信ガード: セッションを completed に更新してから DB 登録
+  // 並行リクエストが来ても、completed ステップなら「受付済み」案内に分岐する
+  const completedSession: ConversationSession = {
+    ...session,
+    step: "completed",
+    updatedAt: new Date().toISOString(),
+  };
+  await upsertSession(env.DB, completedSession);
+
   // reports テーブルへ登録
-  const report = await insertReport(env.DB, {
-    lineUserId: session.lineUserId,
-    status: "pending",
-    closePhotoKey,
-    farPhotoKey,
-    latitude,
-    longitude,
-    locationAddress: session.data.locationAddress ?? null,
-    shootingDate: session.data.shootingDate ?? null,
-    remarks: session.data.remarks ?? null,
-    reporterName: session.data.reporterName ?? null,
-    reporterPhone: session.data.reporterPhone ?? null,
-  });
+  let report;
+  try {
+    report = await insertReport(env.DB, {
+      lineUserId: session.lineUserId,
+      status: "pending",
+      closePhotoKey,
+      farPhotoKey,
+      latitude,
+      longitude,
+      locationAddress: session.data.locationAddress ?? null,
+      shootingDate: session.data.shootingDate ?? null,
+      remarks: session.data.remarks ?? null,
+      reporterName: session.data.reporterName ?? null,
+      reporterPhone: session.data.reporterPhone ?? null,
+    });
+  } catch {
+    // DB 登録失敗: セッションを confirming に戻して再送を促す
+    const restoredSession: ConversationSession = {
+      ...session,
+      step: "confirming",
+      updatedAt: new Date().toISOString(),
+    };
+    await upsertSession(env.DB, restoredSession);
+    await replyMessage(
+      replyToken,
+      [{ type: "text", text: MSG_SUBMIT_ERROR, quickReply: QUICK_REPLY_CONFIRMING }],
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+    );
+    return;
+  }
 
   await deleteSession(env.DB, session.lineUserId);
 

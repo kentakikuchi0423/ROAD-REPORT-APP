@@ -703,6 +703,41 @@ describe("confirming ステップ", () => {
     mockGetSession.mockResolvedValue(makeConfirmingSession());
   });
 
+  it("任意項目がすべて未入力（匿名・全スキップ）でも送信完了できる", async () => {
+    // 必須フィールドのみ・任意フィールドは一切なし（匿名通報）
+    const anonymousSession: ConversationSession = {
+      lineUserId: USER_ID,
+      step: "confirming",
+      data: {
+        reportUuid: "anon-uuid",
+        closePhotoKey: "reports/20260326/anon-uuid/close.jpg",
+        farPhotoKey: "reports/20260326/anon-uuid/far.jpg",
+        latitude: 33.5057,
+        longitude: 132.5595,
+        // locationAddress / shootingDate / remarks / reporterName / reporterPhone は未設定
+      },
+      createdAt: "2026-03-26T00:00:00.000Z",
+      updatedAt: "2026-03-26T00:00:00.000Z",
+    };
+    mockGetSession.mockResolvedValue(anonymousSession);
+
+    await handleConversationMessage(makeTextEvent("送信する"), USER_ID, mockEnv);
+
+    // insertReport が null 値で呼ばれる
+    expect(mockInsertReport).toHaveBeenCalledOnce();
+    const [, reportData] = mockInsertReport.mock.calls[0] as [D1Database, Record<string, unknown>];
+    expect(reportData.locationAddress).toBeNull();
+    expect(reportData.shootingDate).toBeNull();
+    expect(reportData.remarks).toBeNull();
+    expect(reportData.reporterName).toBeNull();
+    expect(reportData.reporterPhone).toBeNull();
+
+    // 完了メッセージが返る
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("受付番号");
+  });
+
   it("「送信する」→ insertReport + deleteSession + 受付番号を含む完了メッセージ", async () => {
     await handleConversationMessage(makeTextEvent("送信する"), USER_ID, mockEnv);
 
@@ -713,9 +748,13 @@ describe("confirming ステップ", () => {
     expect(reportData.closePhotoKey).toBe("reports/20260325/confirm-uuid/close.jpg");
     expect(reportData.latitude).toBe(33.5057);
 
+    // 二重送信ガード: completed に更新してから insertReport を呼ぶ
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, completedSession] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
+    expect(completedSession.step).toBe("completed");
+
     // セッション削除
     expect(mockDeleteSession).toHaveBeenCalledWith(mockEnv.DB, USER_ID);
-    expect(mockUpsertSession).not.toHaveBeenCalled();
 
     // 受付番号を含む完了メッセージ
     expect(mockReplyMessage).toHaveBeenCalledOnce();
@@ -774,5 +813,66 @@ describe("confirming ステップ", () => {
     expect(mockDeleteSession).toHaveBeenCalledWith(mockEnv.DB, USER_ID);
     const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
     expect((messages[0] as { text: string }).text).toContain("やり直し");
+  });
+
+  it("「送信する」→ 先に completed に更新してから insertReport を呼ぶ（二重送信ガード）", async () => {
+    await handleConversationMessage(makeTextEvent("送信する"), USER_ID, mockEnv);
+
+    // upsertSession が completed ステップで呼ばれる（insertReport より前）
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, completedSession] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
+    expect(completedSession.step).toBe("completed");
+
+    // insertReport が呼ばれる
+    expect(mockInsertReport).toHaveBeenCalledOnce();
+
+    // 最終的に deleteSession が呼ばれる
+    expect(mockDeleteSession).toHaveBeenCalledWith(mockEnv.DB, USER_ID);
+  });
+
+  it("insertReport 失敗 → セッションを confirming に戻し、エラーメッセージ（Quick Reply 付き）", async () => {
+    mockInsertReport.mockRejectedValueOnce(new Error("D1 insert error"));
+
+    await handleConversationMessage(makeTextEvent("送信する"), USER_ID, mockEnv);
+
+    // upsertSession が2回呼ばれる: completed → confirming（リカバリー）
+    expect(mockUpsertSession).toHaveBeenCalledTimes(2);
+    const [, first] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
+    const [, second] = mockUpsertSession.mock.calls[1] as [D1Database, ConversationSession];
+    expect(first.step).toBe("completed");
+    expect(second.step).toBe("confirming");
+
+    // deleteSession は呼ばれない
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+
+    // エラーメッセージ（Quick Reply 付き）
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("エラー");
+    expect(msg.quickReply).toBeDefined();
+  });
+});
+
+// ---- completed ステップ（二重送信・処理中） ------------------------------------
+
+describe("completed ステップ", () => {
+  it("任意のメッセージ → 受付済み案内（セッション変更なし）", async () => {
+    mockGetSession.mockResolvedValue({
+      lineUserId: USER_ID,
+      step: "completed",
+      data: {},
+      createdAt: "2026-03-26T00:00:00.000Z",
+      updatedAt: "2026-03-26T00:00:00.000Z",
+    });
+
+    await handleConversationMessage(makeTextEvent("送信する"), USER_ID, mockEnv);
+
+    expect(mockInsertReport).not.toHaveBeenCalled();
+    expect(mockUpsertSession).not.toHaveBeenCalled();
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("受け付け済み");
   });
 });
