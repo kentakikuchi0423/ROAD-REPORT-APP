@@ -10,8 +10,8 @@ dist/
 .env
 .env.local
 .env.*.local
-.dev.vars        # Wrangler ローカル開発用シークレット（実際の秘密情報を含む）
-.dev.vars        # Wrangler ローカル開発用シークレット（実際の秘密情報を含む）
+.dev.vars
+.claude/settings.local.json
 
 # OS
 .DS_Store
@@ -28,5 +28,3 @@ pnpm-debug.log*
 
 # pnpm
 .pnpm-store/
-.dev.vars
-.claude/settings.local.json
