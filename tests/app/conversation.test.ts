@@ -339,7 +339,7 @@ describe("consent ステップ", () => {
     expect(mockUpsertSession).not.toHaveBeenCalled();
     expect(mockReplyMessage).toHaveBeenCalledOnce();
     const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-    expect((messages[0] as { text: string }).text).toContain("キャンセル");
+    expect((messages[0] as { text: string }).text).toContain("中止しました");
   });
 
   it("「同意する」以外のテキスト → 再案内（セッション更新なし）", async () => {

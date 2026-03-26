@@ -16,7 +16,7 @@
 import type { webhook } from "@line/bot-sdk";
 import type { Env } from "../types";
 import { verifySignature, replyMessage } from "../lib/line";
-import { handleConversationMessage } from "./conversation";
+import { handleConversationMessage, handleConversationPostback } from "./conversation";
 
 // ---- エントリポイント -------------------------------------------------------
 
@@ -87,6 +87,10 @@ async function routeEvent(event: webhook.Event, env: Env): Promise<void> {
       await routeMessageEvent(event, env);
       break;
 
+    case "postback":
+      await routePostbackEvent(event, env);
+      break;
+
     case "follow":
       console.log(`[webhook] follow event id=${event.webhookEventId}`);
       await handleFollowEvent(event, env);
@@ -132,6 +136,21 @@ async function routeMessageEvent(
 
 // ---- ユーティリティ ---------------------------------------------------------
 
+async function routePostbackEvent(
+  event: webhook.PostbackEvent,
+  env: Env,
+): Promise<void> {
+  const userId = extractUserId(event);
+  if (!userId) {
+    console.warn(
+      `[webhook] postback event without userId, skipping id=${event.webhookEventId}`,
+    );
+    return;
+  }
+  console.log(`[webhook] postback event id=${event.webhookEventId}`);
+  await handleConversationPostback(event, userId, env);
+}
+
 /** event.source から userId を取得する。取得できない場合は null を返す。 */
 function extractUserId(event: webhook.Event): string | null {
   const source = event.source;
@@ -144,7 +163,7 @@ function extractUserId(event: webhook.Event): string | null {
 
 /**
  * フォローイベント受信時の処理。
- * Step 5b（同意フロー実装時）でウェルカムメッセージ + 同意フロー起動に置き換える。
+ * ウェルカムメッセージを送信し、通報開始を案内する。
  */
 async function handleFollowEvent(
   event: webhook.FollowEvent,
@@ -156,7 +175,7 @@ async function handleFollowEvent(
     [
       {
         type: "text",
-        text: "大洲市道路破損通報へようこそ。\n「通報する」と送信して開始してください。",
+        text: "大洲市の道路破損を通報できるアプリです。\n「通報する」と送信して開始してください。",
       },
     ],
     env.LINE_CHANNEL_ACCESS_TOKEN,

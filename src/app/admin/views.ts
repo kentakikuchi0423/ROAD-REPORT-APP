@@ -7,6 +7,7 @@
 
 import type { Report, ReportStatus } from "../../types";
 import type { ReportsPage } from "../../lib/db";
+import { BRANDING } from "../../lib/branding";
 
 // ---- 定数 -------------------------------------------------------------------
 
@@ -143,7 +144,7 @@ function renderLayout(title: string, body: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)} - 大洲市道路破損通報 管理画面</title>
+  <title>${escapeHtml(title)} - ${BRANDING.appName} 管理画面</title>
   <style>${COMMON_CSS}</style>
 </head>
 <body>
@@ -165,7 +166,7 @@ export function renderLoginPage(error?: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ログイン - 大洲市道路破損通報 管理画面</title>
+  <title>ログイン - ${BRANDING.appName} 管理画面</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif; background: #f1f3f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
     .login-box { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 2rem 2.5rem; width: 100%; max-width: 360px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
@@ -189,7 +190,7 @@ export function renderLoginPage(error?: string): string {
       <input type="password" id="password" name="password" autocomplete="current-password" required>
       <button type="submit">ログイン</button>
     </form>
-    <p class="footer">大洲市道路破損通報サービス</p>
+    <p class="footer">${BRANDING.appName}（個人開発: ${BRANDING.developer}）</p>
   </div>
 </body>
 </html>`;
@@ -198,14 +199,14 @@ export function renderLoginPage(error?: string): string {
 /** 管理トップページ */
 export function renderAdminTop(): string {
   const body = `
-  <h1>大洲市 道路破損通報 管理画面</h1>
+  <h1>${BRANDING.appName} 管理画面</h1>
   <div class="section">
     <h2>メニュー</h2>
     <ul>
       <li><a href="/admin/reports">通報一覧</a> — 受け付けた通報の一覧を確認・ステータス管理</li>
     </ul>
   </div>
-  <p style="margin-top:2rem;font-size:0.85rem;color:#666;">大洲市道路破損通報サービス 管理画面</p>
+  <p style="margin-top:2rem;font-size:0.85rem;color:#666;">${BRANDING.appName} 管理画面（個人開発: ${BRANDING.developer}）</p>
 `;
   return renderLayout("トップ", body);
 }

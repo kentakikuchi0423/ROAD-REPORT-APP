@@ -13,6 +13,7 @@ import type { Env } from "../types";
 import { handleWebhook } from "./webhook";
 import { handleAdmin } from "./admin/index";
 import { privacyPolicyHtml } from "./privacy";
+import { BRANDING } from "../lib/branding";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -63,7 +64,7 @@ function renderTopPage(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>大洲市道路破損通報アプリ</title>
+  <title>${BRANDING.appName}</title>
   <style>
     body { font-family: sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #333; }
     h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
@@ -72,11 +73,13 @@ function renderTopPage(): string {
     code { background: #f0f0f0; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.85rem; }
     .badge { font-size: 0.75rem; background: #e2e8f0; padding: 0.1rem 0.5rem; border-radius: 4px; margin-left: 0.4rem; color: #555; }
     .note { font-size: 0.85rem; color: #777; margin-top: 0.25rem; }
+    .disclaimer { font-size: 0.85rem; color: #666; background: #fff3cd; border-left: 3px solid #ffc107; padding: 0.4rem 0.8rem; margin-top: 0.5rem; }
   </style>
 </head>
 <body>
-  <h1>大洲市道路破損通報アプリ</h1>
+  <h1>${BRANDING.appName}</h1>
   <p class="note">愛媛県大洲市 — LINE チャット上で道路の破損を通報するシステム</p>
+  <p class="disclaimer">${BRANDING.disclaimer}（開発者: ${BRANDING.developer} / <a href="mailto:${BRANDING.contactEmail}">${BRANDING.contactEmail}</a>）</p>
 
   <h2>確認用ページ</h2>
   <ul>

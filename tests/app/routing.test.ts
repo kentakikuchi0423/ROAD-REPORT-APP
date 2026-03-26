@@ -57,6 +57,27 @@ describe("fetch handler routing", () => {
     vi.unstubAllGlobals();
   });
 
+  it("GET / はトップページ HTML（200 + text/html）を返す", async () => {
+    const req = new Request("http://localhost/", { method: "GET" });
+    const res = await worker.fetch(req, mockEnv, mockCtx);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/text\/html/);
+    const text = await res.text();
+    expect(text).toContain("大洲市");
+  });
+
+  it("GET /healthz は 200 + application/json を返す", async () => {
+    const req = new Request("http://localhost/healthz", { method: "GET" });
+    const res = await worker.fetch(req, mockEnv, mockCtx);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/application\/json/);
+    const json = await res.json() as { status: string; service: string };
+    expect(json.status).toBe("ok");
+    expect(json.service).toBe("ozu-road-report");
+  });
+
   it("POST /webhook（正しい署名・空 events）は 200 を返す", async () => {
     // fetch をモック（replyMessage は呼ばれないが念のため）
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 200 })));

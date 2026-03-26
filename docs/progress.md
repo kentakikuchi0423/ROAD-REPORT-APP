@@ -492,6 +492,118 @@ Cloudflare Workers 上に管理者向け Web UI を実装する（サーバー�
 
 ---
 
+## Step 10b: テスト整理・README整備・公開準備 ✅（2026-03-26）
+
+テスト補完、README強化、環境変数整理、公開前チェックリストを整備した。
+
+### テスト追加
+
+- [x] `tests/lib/notification.test.ts` 新規作成（6 テスト）
+  - `createAdminNotifier` — LINE Push API 呼び出し確認（エンドポイント・ヘッダー・本文）
+  - `LINE_ADMIN_USER_ID` 未設定時の `NullAdminNotifier` 動作確認
+  - `locationAddress` null 時の座標フォールバック確認
+  - LINE API エラー時の例外 throw 確認
+- [x] `tests/lib/auth.test.ts` 新規作成（21 テスト）
+  - `verifyPassword`: 正解・不正解・空パスワード
+  - `createSessionToken` / `verifySessionToken`: 正常・別シークレット・期限切れ・改ざん・形式不正
+  - `getSessionCookieValue`: 単一・複数・Base64 値・null ヘッダー
+  - `buildSessionCookieHeader` / `buildLogoutCookieHeader`: 属性確認
+- [x] `tests/app/routing.test.ts`: `GET /` と `GET /healthz` テスト追加（+2 テスト、計 14 テスト）
+- [x] テスト全通過: **194 件**（8 ファイル）
+
+### README 整備
+
+- [x] `README.md`: 環境変数テーブルを追加（全変数・必須/任意・説明）
+  - `LINE_ADMIN_USER_ID`（任意）の説明追加
+  - パスワードハッシュ・セッションシークレット生成コマンドを明示
+- [x] `README.md`: テストファイル構成テーブルを追加（8 ファイル）
+- [x] `README.md`: 本番デプロイへの `docs/checklist.md` 案内を追記
+
+### 環境変数整理
+
+- [x] `.dev.vars.example`: `LINE_ADMIN_USER_ID` をコメントアウト形式で追記（任意設定）
+
+### 公開前チェックリスト
+
+- [x] `docs/checklist.md` 新規作成
+  - Cloudflare リソース作成（D1 / R2 / Workers デプロイ）
+  - Secrets 登録手順（wrangler secret put コマンド例）
+  - LINE チャンネル設定（Webhook URL・自動応答オフ）
+  - プライバシーポリシー URL の最終設定 TODO
+  - セキュリティ確認（.dev.vars の git 除外・HTTPS・R2 非公開）
+  - 本番動作確認（会話フロー全ステップ・管理画面全機能）
+  - 受け入れ確認・引き渡し項目
+
+### 採用判断メモ
+
+- `notification.test.ts` と `auth.test.ts` は `tests/lib/` に配置（既存 `line.test.ts` / `validation.test.ts` と同じ粒度）
+- auth テストで期限切れトークンは「手製トークン」方式（Date.now() - 1000 の有効期限を使用）— vi.useFakeTimers より実態に近い
+- README のテストテーブルは全 8 ファイルの役割を一覧化し、初見の開発者が全体像を把握しやすくした
+
+---
+
+## Step 10d: UX改善・ブランディング修正・セキュリティ/保守性向上 ✅（2026-03-26）
+
+写真入力 UX の改善・撮影日 datetime picker 導入・キャンセル導線追加・個人開発表記修正を実施した。
+
+### 写真入力 UX 改善
+
+- [x] `src/app/conversation.ts`: 近景・遠景写真の各プロンプトに `camera` / `cameraRoll` Quick Reply を追加
+  - カメラ起動・アルバム選択を 1 タップで行えるようになった
+  - エラー（写真以外が届いた場合）のリトライメッセージにも同 QR を追加
+
+### 撮影日 datetime picker 導入
+
+- [x] `src/app/conversation.ts`:
+  - `buildShootingDateQuickReply()`: `datetimepicker` アクション（mode: date）+ スキップ + 中止 の QR を動的生成
+  - `getTodayJst()`: JST 当日日付を "YYYY-MM-DD" で返すヘルパー（datetimepicker.max に使用）
+  - `handleConversationPostback()`: postback イベントで日付を受け取り remarks ステップへ遷移する関数を export
+- [x] `src/app/webhook.ts`:
+  - `routeEvent()` に `case "postback":` を追加
+  - `routePostbackEvent()` で userId を抽出し `handleConversationPostback()` へ委譲
+
+### キャンセル導線追加
+
+- [x] `src/app/conversation.ts`:
+  - `CANCEL_TEXT = "通報を中止する"` を定数化
+  - `QR_ITEM_CANCEL`: キャンセルボタン定義を共通化
+  - `handleCancelIfRequested()`: テキスト「通報を中止する」を検出し即時キャンセルする共通ヘルパー
+  - consent 以降の全ステップで即時キャンセル対応（確認ステップなし）
+  - `QUICK_REPLY_SKIP_CANCEL`: スキップ + 中止ボタン（旧 QUICK_REPLY_SKIP を置き換え）
+  - `QUICK_REPLY_CONFIRMING` に「通報を中止する」ボタンを追加
+
+### 個人開発表記修正
+
+- [x] `src/lib/branding.ts` 新規作成
+  - `BRANDING` 定数: appName / developer / contactEmail / privacyPolicyUrl / disclaimer を 1 か所に集約
+- [x] `src/app/conversation.ts`: BRANDING を参照して同意文・完了メッセージを更新
+  - 完了メッセージの「大洲市へのお問い合わせ」→「アプリへのお問い合わせは {contactEmail}」
+  - 同意文に disclaimer（非公式アプリ注意書き）を追加
+- [x] `src/app/webhook.ts`: follow イベントの Welcome メッセージを更新（公式感を除去）
+- [x] `src/app/privacy.ts`: 主体を「菊地けんた（個人）」に変更、連絡先を contactEmail に統一
+- [x] `src/app/index.ts`: トップページに disclaimer + contactEmail を表示
+- [x] `src/app/admin/views.ts`: 管理画面タイトル・フッタを BRANDING 参照に統一
+
+### シークレット管理整備
+
+- [x] `.dev.vars.example`: 本番環境では新しい値を生成すること、git add しないことの注意書きを追記
+- [x] `git log --all -- .dev.vars` で .dev.vars がコミット履歴に存在しないことを確認済み
+
+### テスト
+
+- [x] `tests/app/conversation.test.ts`: キャンセルメッセージ文言の期待値を「中止しました」に更新
+- [x] テスト全通過: **194 件**（変更後も同数）
+
+### 採用判断メモ
+
+- datetimepicker の max 値は実行時 JST 今日日付を動的生成（ハードコードしない）
+- キャンセルは全ステップで確認なし即時キャンセル（確認ステップなし）
+  - R2 保存済み写真は孤立オブジェクトとして残るが、容量的に軽微なため許容
+- BRANDING 定数を 1 か所（src/lib/branding.ts）に集約し、全ファイルから import で参照
+  - privacyPolicyUrl は TODO コメントで本番 URL 確定後に差し替えることを明記
+
+---
+
 ## Step 11: デプロイ・本番環境構築
 
 Cloudflare へのデプロイと本番環境の設定を行う。

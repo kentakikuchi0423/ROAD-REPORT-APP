@@ -1,10 +1,15 @@
 # Wrangler ローカル開発用シークレット
 # このファイルをコピーして .dev.vars を作成し、実際の値を設定してください
 # .dev.vars は .gitignore により git 管理対象外です
+#
+# ⚠️ 本番デプロイ時は .dev.vars の値を流用せず、新しい値を生成してください
+#    本番シークレットは `wrangler secret put <KEY>` で設定します（コードには含めない）
+# ⚠️ .dev.vars を git add / commit しないこと（.gitignore で除外済みですが念のため確認を）
 
 # LINE Messaging API
 LINE_CHANNEL_SECRET=<LINE チャンネルシークレット>
 LINE_CHANNEL_ACCESS_TOKEN=<LINE チャンネルアクセストークン>
+# LINE_ADMIN_USER_ID=<管理者の LINE ユーザー ID（任意）。設定すると新規通報時に LINE プッシュ通知を送信>
 
 # 管理画面
 ADMIN_USERNAME=admin

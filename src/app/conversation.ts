@@ -7,11 +7,19 @@
  *   - close_photo      → 画像受信 → R2 保存 → far_photo ステップへ
  *   - far_photo        → 画像受信 → R2 保存 → location ステップへ
  *   - location         → 位置情報受信 → セッション保存 → shooting_date ステップへ
- *   - shooting_date    → テキスト入力またはスキップ → remarks ステップへ
+ *   - shooting_date    → datetime picker postback またはテキスト入力またはスキップ → remarks ステップへ
  *   - remarks          → テキスト入力またはスキップ → reporter_name ステップへ
  *   - reporter_name    → テキスト入力またはスキップ → reporter_phone ステップへ
  *   - reporter_phone   → テキスト入力またはスキップ → confirming ステップへ
  *   - confirming       → 「送信する」→ D1 登録 + 受付番号発行 / 「やり直す」→ consent ステップへ
+ *
+ * キャンセル方針:
+ *   consent 以降の全ステップで「通報を中止する」テキストを受け取ると即時キャンセル。
+ *   R2 に保存済みの写真は孤立オブジェクトとして残る（管理コスト軽微なため許容）。
+ *
+ * postback 処理:
+ *   shooting_date ステップの datetime picker は LINE postback イベントで届く。
+ *   handleConversationPostback() を別エントリとして export し、webhook.ts からルーティングする。
  *
  * 画像保存方針:
  *   近景受信時に UUID を生成し、R2 キー `reports/{YYYYMMDD}/{uuid}/close.jpg` に即時保存。
@@ -32,18 +40,21 @@ import {
   validateReporterPhone,
   type ValidationResult,
 } from "../lib/validation";
+import { BRANDING } from "../lib/branding";
 
 // ---- メッセージ文言 ----------------------------------------------------------
 
 const MSG_HOW_TO_START =
-  "大洲市道路破損通報へようこそ。\n通報を開始するには「通報する」と送信してください。";
+  "大洲市の道路破損通報アプリへようこそ。\n通報を開始するには「通報する」と送信してください。";
 
 /**
  * 利用同意を求めるメッセージ。
- * プライバシーポリシーの URL は本番デプロイ後に追記予定（TODO: BASE_URL 確定後に差し替え）。
+ * プライバシーポリシーの URL は BRANDING.privacyPolicyUrl を参照（TODO: 本番 URL 確定後に差し替え）。
  */
 const MSG_REQUEST_CONSENT = [
-  "大洲市道路破損通報サービスへようこそ。",
+  "大洲市の道路破損を通報できるアプリです。",
+  "",
+  `【重要】${BRANDING.disclaimer}`,
   "",
   "通報にあたり、以下の情報をお預かりします：",
   "・近景写真・遠景写真（必須）",
@@ -52,10 +63,10 @@ const MSG_REQUEST_CONSENT = [
   "・お名前・電話番号（任意、匿名可）",
   "・LINE ユーザー ID（会話管理のみに使用）",
   "",
-  "収集した情報は大洲市の道路修繕対応のみに使用します。",
+  "収集した情報は大洲市の道路修繕への通報対応のみに使用します。",
   "お名前・電話番号の入力は任意で、匿名での通報も可能です。",
   "",
-  "プライバシーポリシーは大洲市道路通報サービスのページからご確認いただけます。",
+  `プライバシーポリシー: ${BRANDING.privacyPolicyUrl}`,
   "",
   "内容にご同意いただける場合は「同意する」をタップしてください。",
   "中止する場合は「キャンセル」をタップしてください。",
@@ -63,23 +74,39 @@ const MSG_REQUEST_CONSENT = [
 
 /** 同意テキスト以外が届いた場合の再案内 */
 const MSG_RETRY_CONSENT =
-  "通報を始めるには「同意する」と送信してください。\n中止する場合は「キャンセル」と送信してください。";
+  "通報を始めるには「同意する」をタップしてください。\n中止する場合は「キャンセル」をタップしてください。";
 
 /** キャンセル時のメッセージ */
 const MSG_CANCELLED =
-  "通報をキャンセルしました。\n再度通報する場合は「通報する」と送信してください。";
+  "通報を中止しました。\n再度通報する場合は「通報する」と送信してください。";
 
-const MSG_REQUEST_CLOSE_PHOTO =
-  "ありがとうございます。通報を開始します。\n\nまず「近景写真」（破損箇所を写した写真）を1枚送ってください。";
+const MSG_REQUEST_CLOSE_PHOTO = [
+  "ありがとうございます。通報を開始します。",
+  "",
+  "まず「近景写真」（破損箇所を写した写真）を1枚送ってください。",
+  "下のボタンでカメラを起動するか、アルバムから選択してください。",
+].join("\n");
 
-const MSG_RETRY_CLOSE_PHOTO =
-  "写真（画像ファイル）を送ってください。\n\n「近景写真」（破損箇所を写した写真）を1枚送ってください。";
+const MSG_RETRY_CLOSE_PHOTO = [
+  "写真（画像ファイル）を送ってください。",
+  "",
+  "「近景写真」（破損箇所を写した写真）を1枚送ってください。",
+  "下のボタンでカメラを起動するか、アルバムから選択してください。",
+].join("\n");
 
-const MSG_REQUEST_FAR_PHOTO =
-  "近景写真を受け付けました。\n\n次に「遠景写真」（周辺の状況がわかる写真）を1枚送ってください。";
+const MSG_REQUEST_FAR_PHOTO = [
+  "近景写真を受け付けました。",
+  "",
+  "次に「遠景写真」（周辺の状況がわかる写真）を1枚送ってください。",
+  "下のボタンでカメラを起動するか、アルバムから選択してください。",
+].join("\n");
 
-const MSG_RETRY_FAR_PHOTO =
-  "写真（画像ファイル）を送ってください。\n\n「遠景写真」（周辺の状況がわかる写真）を1枚送ってください。";
+const MSG_RETRY_FAR_PHOTO = [
+  "写真（画像ファイル）を送ってください。",
+  "",
+  "「遠景写真」（周辺の状況がわかる写真）を1枚送ってください。",
+  "下のボタンでカメラを起動するか、アルバムから選択してください。",
+].join("\n");
 
 const MSG_REQUEST_LOCATION = [
   "遠景写真を受け付けました。",
@@ -96,35 +123,33 @@ const MSG_RETRY_LOCATION = [
 const MSG_REQUEST_SHOOTING_DATE = [
   "位置情報を受け付けました。",
   "",
-  "「撮影日付」を入力してください（任意）。",
-  "形式：YYYY-MM-DD（例：2026-03-25）",
-  "",
-  "スキップする場合はボタンをタップするか「スキップ」と送信してください。",
+  "「撮影日付」を選択してください（任意）。",
+  "カレンダーボタンで選ぶか、YYYY-MM-DD 形式で直接入力もできます（例：2026-03-25）。",
 ].join("\n");
 
 const MSG_REQUEST_REMARKS = [
   "「補足事項」があれば入力してください（任意・500文字以内）。",
   "",
-  "スキップする場合はボタンをタップするか「スキップ」と送信してください。",
+  "スキップする場合は「スキップ」をタップ、中止する場合は「通報を中止する」をタップしてください。",
 ].join("\n");
 
 const MSG_REQUEST_REPORTER_NAME = [
   "「お名前」を入力してください（任意）。",
   "匿名での通報も可能です。",
   "",
-  "スキップする場合はボタンをタップするか「スキップ」と送信してください。",
+  "スキップする場合は「スキップ」をタップ、中止する場合は「通報を中止する」をタップしてください。",
 ].join("\n");
 
 const MSG_REQUEST_REPORTER_PHONE = [
   "「電話番号」を入力してください（任意）。",
   "形式：0896-24-1111",
   "",
-  "スキップする場合はボタンをタップするか「スキップ」と送信してください。",
+  "スキップする場合は「スキップ」をタップ、中止する場合は「通報を中止する」をタップしてください。",
 ].join("\n");
 
-/** confirming ステップで「送信する」「やり直す」以外が届いた場合の案内 */
+/** confirming ステップで想定外のテキストが届いた場合の案内 */
 const MSG_RETRY_CONFIRMING =
-  "「送信する」または「やり直す」を選択してください。";
+  "「送信する」「やり直す」「通報を中止する」のいずれかを選択してください。";
 
 /** セッションデータ欠損時のエラーメッセージ */
 const MSG_SESSION_ERROR =
@@ -140,12 +165,21 @@ const MSG_SUBMIT_ERROR =
 
 /** 任意テキスト入力ステップで、テキスト以外が届いた場合の共通案内 */
 const MSG_RETRY_TEXT_OR_SKIP =
-  "テキストで入力するか、「スキップ」をタップ（または送信）してください。";
+  "テキストで入力するか、「スキップ」または「通報を中止する」をタップしてください。";
 
 /** スキップを示すテキスト */
 const SKIP_TEXT = "スキップ";
 
+/** 通報中止を示すテキスト（全ステップ共通） */
+const CANCEL_TEXT = "通報を中止する";
+
 // ---- Quick Reply 定義 --------------------------------------------------------
+
+/** キャンセルアクション（各 QR に共通で追加する） */
+const QR_ITEM_CANCEL = {
+  type: "action",
+  action: { type: "message", label: "通報を中止する", text: CANCEL_TEXT },
+};
 
 /** 利用同意 Quick Reply（「同意する」「キャンセル」） */
 const QUICK_REPLY_CONSENT = {
@@ -155,10 +189,23 @@ const QUICK_REPLY_CONSENT = {
   ],
 };
 
-/** スキップ Quick Reply（任意入力ステップ用） */
-const QUICK_REPLY_SKIP = {
+/**
+ * 写真入力 Quick Reply（カメラ起動・アルバム選択・中止）
+ * close_photo / far_photo ステップで使用。
+ */
+const QUICK_REPLY_PHOTO = {
+  items: [
+    { type: "action", action: { type: "camera", label: "カメラで撮影" } },
+    { type: "action", action: { type: "cameraRoll", label: "アルバムから選択" } },
+    QR_ITEM_CANCEL,
+  ],
+};
+
+/** スキップ + 中止 Quick Reply（任意テキスト入力ステップ用） */
+const QUICK_REPLY_SKIP_CANCEL = {
   items: [
     { type: "action", action: { type: "message", label: "スキップ", text: "スキップ" } },
+    QR_ITEM_CANCEL,
   ],
 };
 
@@ -167,6 +214,7 @@ const QUICK_REPLY_CONFIRMING = {
   items: [
     { type: "action", action: { type: "message", label: "送信する", text: "送信する" } },
     { type: "action", action: { type: "message", label: "やり直す", text: "やり直す" } },
+    QR_ITEM_CANCEL,
   ],
 };
 
@@ -174,6 +222,7 @@ const QUICK_REPLY_CONFIRMING = {
 const QUICK_REPLY_LOCATION = {
   items: [
     { type: "action", action: { type: "location", label: "位置情報を送る" } },
+    QR_ITEM_CANCEL,
   ],
 };
 
@@ -185,6 +234,54 @@ type MsgSpec = string | { text: string; quickReply?: unknown };
 type NextMsgSpec =
   | MsgSpec
   | ((data: ConversationSession["data"]) => MsgSpec);
+
+// ---- Quick Reply ビルダー ---------------------------------------------------
+
+/**
+ * 撮影日付ステップ用 Quick Reply を生成する。
+ * datetime picker の max 値は JST 当日日付を動的にセットする。
+ */
+function buildShootingDateQuickReply(): unknown {
+  return {
+    items: [
+      {
+        type: "action",
+        action: {
+          type: "datetimepicker",
+          label: "カレンダーで選択",
+          data: "action=select_shooting_date",
+          mode: "date",
+          max: getTodayJst(),
+        },
+      },
+      { type: "action", action: { type: "message", label: "スキップ", text: "スキップ" } },
+      QR_ITEM_CANCEL,
+    ],
+  };
+}
+
+// ---- キャンセル共通処理 -----------------------------------------------------
+
+/**
+ * テキストメッセージが「通報を中止する」であればセッションを削除してキャンセル返信する。
+ * @returns キャンセル処理を行った場合 true
+ */
+async function handleCancelIfRequested(
+  event: webhook.MessageEvent,
+  session: ConversationSession,
+  env: Env,
+  replyToken: string,
+): Promise<boolean> {
+  if (event.message.type !== "text") return false;
+  if (event.message.text.trim() !== CANCEL_TEXT) return false;
+  await deleteSession(env.DB, session.lineUserId);
+  await replyMessage(
+    replyToken,
+    [{ type: "text", text: MSG_CANCELLED }],
+    env.LINE_CHANNEL_ACCESS_TOKEN,
+  );
+  return true;
+}
 
 // ---- エントリポイント --------------------------------------------------------
 
@@ -239,7 +336,8 @@ export async function handleConversationMessage(
         validateShootingDate,
         (data, value) => ({ ...data, shootingDate: value }),
         "remarks",
-        { text: MSG_REQUEST_REMARKS, quickReply: QUICK_REPLY_SKIP },
+        { text: MSG_REQUEST_REMARKS, quickReply: QUICK_REPLY_SKIP_CANCEL },
+        buildShootingDateQuickReply(),
       );
       break;
 
@@ -249,7 +347,7 @@ export async function handleConversationMessage(
         validateRemarks,
         (data, value) => ({ ...data, remarks: value }),
         "reporter_name",
-        { text: MSG_REQUEST_REPORTER_NAME, quickReply: QUICK_REPLY_SKIP },
+        { text: MSG_REQUEST_REPORTER_NAME, quickReply: QUICK_REPLY_SKIP_CANCEL },
       );
       break;
 
@@ -259,7 +357,7 @@ export async function handleConversationMessage(
         validateReporterName,
         (data, value) => ({ ...data, reporterName: value }),
         "reporter_phone",
-        { text: MSG_REQUEST_REPORTER_PHONE, quickReply: QUICK_REPLY_SKIP },
+        { text: MSG_REQUEST_REPORTER_PHONE, quickReply: QUICK_REPLY_SKIP_CANCEL },
       );
       break;
 
@@ -347,7 +445,7 @@ async function handleConsentStep(
 
   const text = event.message.text.trim();
 
-  if (text === "キャンセル") {
+  if (text === "キャンセル" || text === CANCEL_TEXT) {
     await deleteSession(env.DB, session.lineUserId);
     await replyMessage(
       replyToken,
@@ -375,7 +473,7 @@ async function handleConsentStep(
   await upsertSession(env.DB, updated);
   await replyMessage(
     replyToken,
-    [{ type: "text", text: MSG_REQUEST_CLOSE_PHOTO }],
+    [{ type: "text", text: MSG_REQUEST_CLOSE_PHOTO, quickReply: QUICK_REPLY_PHOTO }],
     env.LINE_CHANNEL_ACCESS_TOKEN,
   );
 }
@@ -389,10 +487,13 @@ async function handleClosePhotoStep(
   env: Env,
   replyToken: string,
 ): Promise<void> {
+  // キャンセルチェック（テキストで「通報を中止する」が来た場合）
+  if (await handleCancelIfRequested(event, session, env, replyToken)) return;
+
   if (event.message.type !== "image") {
     await replyMessage(
       replyToken,
-      [{ type: "text", text: MSG_RETRY_CLOSE_PHOTO }],
+      [{ type: "text", text: MSG_RETRY_CLOSE_PHOTO, quickReply: QUICK_REPLY_PHOTO }],
       env.LINE_CHANNEL_ACCESS_TOKEN,
     );
     return;
@@ -418,7 +519,7 @@ async function handleClosePhotoStep(
 
   await replyMessage(
     replyToken,
-    [{ type: "text", text: MSG_REQUEST_FAR_PHOTO }],
+    [{ type: "text", text: MSG_REQUEST_FAR_PHOTO, quickReply: QUICK_REPLY_PHOTO }],
     env.LINE_CHANNEL_ACCESS_TOKEN,
   );
 }
@@ -432,10 +533,13 @@ async function handleFarPhotoStep(
   env: Env,
   replyToken: string,
 ): Promise<void> {
+  // キャンセルチェック（テキストで「通報を中止する」が来た場合）
+  if (await handleCancelIfRequested(event, session, env, replyToken)) return;
+
   if (event.message.type !== "image") {
     await replyMessage(
       replyToken,
-      [{ type: "text", text: MSG_RETRY_FAR_PHOTO }],
+      [{ type: "text", text: MSG_RETRY_FAR_PHOTO, quickReply: QUICK_REPLY_PHOTO }],
       env.LINE_CHANNEL_ACCESS_TOKEN,
     );
     return;
@@ -475,6 +579,9 @@ async function handleLocationStep(
   env: Env,
   replyToken: string,
 ): Promise<void> {
+  // キャンセルチェック（テキストで「通報を中止する」が来た場合）
+  if (await handleCancelIfRequested(event, session, env, replyToken)) return;
+
   if (event.message.type !== "location") {
     await replyMessage(
       replyToken,
@@ -506,7 +613,7 @@ async function handleLocationStep(
 
   await replyMessage(
     replyToken,
-    [{ type: "text", text: MSG_REQUEST_SHOOTING_DATE, quickReply: QUICK_REPLY_SKIP }],
+    [{ type: "text", text: MSG_REQUEST_SHOOTING_DATE, quickReply: buildShootingDateQuickReply() }],
     env.LINE_CHANNEL_ACCESS_TOKEN,
   );
 }
@@ -516,10 +623,13 @@ async function handleLocationStep(
 /**
  * shooting_date / remarks / reporter_name / reporter_phone の 4 ステップに共通する処理。
  *
- * - テキスト以外 → MSG_RETRY_TEXT_OR_SKIP（スキップ Quick Reply 付き）を返信
+ * - テキスト以外 → MSG_RETRY_TEXT_OR_SKIP を返信（retryQuickReply 付き）
+ * - 「通報を中止する」 → 即時キャンセル
  * - 「スキップ」 → フィールドを保存せず次ステップへ
  * - 有効なテキスト → バリデーション通過後に保存し次ステップへ
  * - バリデーション失敗 → エラーメッセージを返信（セッション更新なし）
+ *
+ * @param retryQuickReply エラー・リトライ時に使う Quick Reply（省略時は QUICK_REPLY_SKIP_CANCEL）
  */
 async function handleOptionalTextStep(
   event: webhook.MessageEvent,
@@ -533,11 +643,12 @@ async function handleOptionalTextStep(
   ) => ConversationSession["data"],
   nextStep: ConversationStep,
   nextMsg: NextMsgSpec,
+  retryQuickReply: unknown = QUICK_REPLY_SKIP_CANCEL,
 ): Promise<void> {
   if (event.message.type !== "text") {
     await replyMessage(
       replyToken,
-      [{ type: "text", text: MSG_RETRY_TEXT_OR_SKIP, quickReply: QUICK_REPLY_SKIP }],
+      [{ type: "text", text: MSG_RETRY_TEXT_OR_SKIP, quickReply: retryQuickReply }],
       env.LINE_CHANNEL_ACCESS_TOKEN,
     );
     return;
@@ -545,13 +656,24 @@ async function handleOptionalTextStep(
 
   const text = event.message.text.trim();
 
+  // キャンセル検出
+  if (text === CANCEL_TEXT) {
+    await deleteSession(env.DB, session.lineUserId);
+    await replyMessage(
+      replyToken,
+      [{ type: "text", text: MSG_CANCELLED }],
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+    );
+    return;
+  }
+
   let nextData = session.data;
   if (text !== SKIP_TEXT) {
     const result = validate(text);
     if (!result.ok) {
       await replyMessage(
         replyToken,
-        [{ type: "text", text: result.error, quickReply: QUICK_REPLY_SKIP }],
+        [{ type: "text", text: result.error, quickReply: retryQuickReply }],
         env.LINE_CHANNEL_ACCESS_TOKEN,
       );
       return;
@@ -594,6 +716,16 @@ async function handleConfirmingStep(
   }
 
   const text = event.message.text.trim();
+
+  if (text === CANCEL_TEXT) {
+    await deleteSession(env.DB, session.lineUserId);
+    await replyMessage(
+      replyToken,
+      [{ type: "text", text: MSG_CANCELLED }],
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+    );
+    return;
+  }
 
   if (text === "やり直す") {
     // consent ステップに戻し、データをリセット
@@ -739,6 +871,74 @@ function buildCompletionMessage(receiptNumber: string): string {
     receiptNumber,
     "",
     "この番号を控えておいてください。",
-    "大洲市へのお問い合わせの際にご利用ください。",
+    `アプリに関するお問い合わせは ${BRANDING.contactEmail} までご連絡ください。`,
   ].join("\n");
+}
+
+/**
+ * JST（UTC+9）での当日日付を "YYYY-MM-DD" 形式で返す。
+ * datetime picker の max 値として使用する。
+ */
+function getTodayJst(): string {
+  const now = new Date();
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const yyyy = jst.getUTCFullYear().toString();
+  const mm = (jst.getUTCMonth() + 1).toString().padStart(2, "0");
+  const dd = jst.getUTCDate().toString().padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// ---- postback エントリポイント -----------------------------------------------
+
+/**
+ * LINE postback イベントを会話フローに委譲する。
+ * 現在は shooting_date ステップの datetime picker 選択のみ処理する。
+ *
+ * @param event  LINE postback イベント
+ * @param userId LINE ユーザー ID
+ * @param env    Workers 環境バインディング
+ */
+export async function handleConversationPostback(
+  event: webhook.PostbackEvent,
+  userId: string,
+  env: Env,
+): Promise<void> {
+  const replyToken = event.replyToken;
+  if (!replyToken) return;
+
+  const session = await getSession(env.DB, userId);
+  if (!session) return;
+
+  if (
+    session.step === "shooting_date" &&
+    event.postback.data === "action=select_shooting_date"
+  ) {
+    const date = (event.postback.params as Record<string, string> | undefined)?.["date"];
+    if (!date) return;
+
+    const result = validateShootingDate(date);
+    if (!result.ok) {
+      // datetime picker の max 制約で通常は発生しないが、念のため二重チェック
+      await replyMessage(
+        replyToken,
+        [{ type: "text", text: result.error, quickReply: buildShootingDateQuickReply() }],
+        env.LINE_CHANNEL_ACCESS_TOKEN,
+      );
+      return;
+    }
+
+    const nextData: ConversationSession["data"] = { ...session.data, shootingDate: result.value };
+    const updated: ConversationSession = {
+      ...session,
+      step: "remarks",
+      data: nextData,
+      updatedAt: new Date().toISOString(),
+    };
+    await upsertSession(env.DB, updated);
+    await replyMessage(
+      replyToken,
+      [{ type: "text", text: MSG_REQUEST_REMARKS, quickReply: QUICK_REPLY_SKIP_CANCEL }],
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+    );
+  }
 }

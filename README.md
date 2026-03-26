@@ -26,15 +26,38 @@ pnpm install
 
 ### 2. 環境変数の設定
 
-`.env.example` をコピーして `.dev.vars` を作成し、実際の値を記入します。
+`.dev.vars.example` をコピーして `.dev.vars` を作成し、実際の値を記入します。
 
 ```bash
-cp .env.example .dev.vars
+cp .dev.vars.example .dev.vars
 # .dev.vars を編集して実際の値を設定する
 ```
 
-`.dev.vars` は `wrangler dev` 実行時に自動で読み込まれます。  
+`.dev.vars` は `wrangler dev` 実行時に自動で読み込まれます。
 **`.dev.vars` は `.gitignore` に含まれており、コミットしないでください。**
+
+#### 環境変数一覧
+
+| 変数名 | 必須 | 説明 |
+|---|---|---|
+| `LINE_CHANNEL_SECRET` | ✅ | LINE Developers のチャンネルシークレット（Webhook 署名検証） |
+| `LINE_CHANNEL_ACCESS_TOKEN` | ✅ | LINE チャンネルアクセストークン（メッセージ送信・画像取得） |
+| `LINE_ADMIN_USER_ID` | 任意 | 管理者の LINE ユーザー ID。設定すると新規通報時に LINE プッシュ通知を送信 |
+| `ADMIN_USERNAME` | ✅ | 管理画面のログインユーザー名 |
+| `ADMIN_PASSWORD_HASH` | ✅ | 管理画面パスワードの SHA-256 hex |
+| `ADMIN_SESSION_SECRET` | ✅ | セッション Cookie 署名用シークレット（64 文字以上を推奨） |
+
+**パスワードハッシュの生成:**
+
+```bash
+echo -n "yourpassword" | sha256sum
+```
+
+**セッションシークレットの生成:**
+
+```bash
+openssl rand -hex 32
+```
 
 ### 3. ローカル D1 migration の適用
 
@@ -122,11 +145,24 @@ npx wrangler dev
 npm test
 ```
 
+テストファイルの構成:
+
+| ファイル | 内容 |
+|---|---|
+| `tests/lib/db.test.ts` | D1 ヘルパー関数（insertReport / getReports 等） |
+| `tests/lib/line.test.ts` | LINE API ラッパー（verifySignature / replyMessage 等） |
+| `tests/lib/validation.test.ts` | 入力値バリデーション関数 |
+| `tests/lib/notification.test.ts` | 管理者通知（LINE Push / NullNotifier） |
+| `tests/lib/auth.test.ts` | 認証ユーティリティ（パスワード検証・セッション Cookie） |
+| `tests/app/routing.test.ts` | エントリーポイントのルーティング・Webhook 署名検証 |
+| `tests/app/conversation.test.ts` | 会話フロー全ステップ（consent → 完了） |
+| `tests/app/admin.test.ts` | 管理画面 API（一覧・詳細・ステータス更新・CSV・削除） |
+
 ---
 
 ## wrangler.toml について
 
-`database_id` はローカル開発用のダミー値 (`00000000-0000-0000-0000-000000000000`) が設定されています。  
+`database_id` はローカル開発用のダミー値 (`00000000-0000-0000-0000-000000000000`) が設定されています。
 本番デプロイ前に `wrangler d1 create ozu-road-report-db` で取得した実際の ID に変更してください。
 
 ---
@@ -135,4 +171,11 @@ npm test
 
 - `.dev.vars` に記載した値はコミットしないでください（`.gitignore` 設定済み）
 - `ADMIN_PASSWORD_HASH` は `echo -n "yourpassword" | sha256sum` で生成した SHA-256 hex を使用
-- `ADMIN_SESSION_SECRET` は `openssl rand -hex 32` で生成してください
+- `ADMIN_SESSION_SECRET` は `openssl rand -hex 32` で生成してください（64 文字以上を推奨）
+- `LINE_ADMIN_USER_ID` は任意設定です。未設定でも通報フローは正常に動作します
+
+---
+
+## 本番デプロイについて
+
+本番デプロイ前に `docs/checklist.md` のチェックリストを確認してください。
