@@ -428,19 +428,21 @@ Cloudflare へのデプロイと本番環境の設定を行う。
 
 ## Step 9b: ローカル確認環境の整備 ✅（2026-03-26）
 
-`npx wrangler dev` 後にブラウザで何も表示されない問題を解消した。
+`npx wrangler dev` 後にブラウザで接続できない問題を解消した。
 
 ### 原因
 
 - `/` に対するルートが未定義（404 を返すのみ）
 - `wrangler.toml` の `database_id` が UUID 形式でなく起動エラーの原因になりえた
 - `.dev.vars`（実際のシークレット値を含む）が `.gitignore` 未登録でコミット済みだった
+- devcontainer 環境で `wrangler dev` が `127.0.0.1` のみにバインドし、ポートフォワーディングが通らなかった
 
 ### 実施内容
 
 - [x] `src/app/index.ts`: `GET /` トップページ追加（URL 案内・主要リンク一覧）
 - [x] `src/app/index.ts`: `GET /healthz` ヘルスチェックエンドポイント追加
 - [x] `wrangler.toml`: `database_id` をダミー UUID に変更（ローカル開発用）
+- [x] `wrangler.toml`: `[dev]` セクションに `ip = "0.0.0.0"` 追加（devcontainer ポートフォワーディング対応）
 - [x] `.gitignore`: `.dev.vars` を追加（シークレット漏洩防止）
 - [x] `.env.example`: ダミー値のみのテンプレートを作成
 - [x] `package.json`: `d1:migrate:local` スクリプト追加
