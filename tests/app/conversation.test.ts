@@ -1,5 +1,5 @@
 /**
- * 会話フロー（近景・遠景写真収集 + 位置情報受付）のユニットテスト
+ * 会話フロー（近景・遠景写真収集 + 位置情報受付 + 利用同意）のユニットテスト
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -129,6 +129,17 @@ function makeStickerEvent(): webhook.MessageEvent {
   } as unknown as webhook.MessageEvent;
 }
 
+/** consent ステップのセッション */
+function makeConsentSession(): ConversationSession {
+  return {
+    lineUserId: USER_ID,
+    step: "consent",
+    data: {},
+    createdAt: "2026-03-26T00:00:00.000Z",
+    updatedAt: "2026-03-26T00:00:00.000Z",
+  };
+}
+
 /** 任意テキスト入力ステップ共通のセッション */
 function makeOptionalStepSession(step: ConversationSession["step"]): ConversationSession {
   return {
@@ -251,17 +262,19 @@ describe("セッションなし", () => {
     mockGetSession.mockResolvedValue(null);
   });
 
-  it("「通報する」テキスト → セッション作成 + 近景写真を求めるメッセージ", async () => {
+  it("「通報する」テキスト → セッション作成（consent ステップ）+ 利用同意メッセージ", async () => {
     await handleConversationMessage(makeTextEvent("通報する"), USER_ID, mockEnv);
 
     expect(mockUpsertSession).toHaveBeenCalledOnce();
     const [, session] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
-    expect(session.step).toBe("close_photo");
+    expect(session.step).toBe("consent");
     expect(session.lineUserId).toBe(USER_ID);
 
     expect(mockReplyMessage).toHaveBeenCalledOnce();
     const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-    expect((messages[0] as { text: string }).text).toContain("近景写真");
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("同意する");
+    expect(msg.quickReply).toBeDefined();
   });
 
   it("「通報する」前後の空白は許容する", async () => {
@@ -290,6 +303,57 @@ describe("セッションなし", () => {
 
     expect(mockReplyMessage).not.toHaveBeenCalled();
     expect(mockUpsertSession).not.toHaveBeenCalled();
+  });
+});
+
+// ---- consent ステップ --------------------------------------------------------
+
+describe("consent ステップ", () => {
+  beforeEach(() => {
+    mockGetSession.mockResolvedValue(makeConsentSession());
+  });
+
+  it("「同意する」→ セッションを close_photo に更新 + 近景写真を求めるメッセージ", async () => {
+    await handleConversationMessage(makeTextEvent("同意する"), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, updated] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
+    expect(updated.step).toBe("close_photo");
+
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("近景写真");
+  });
+
+  it("「キャンセル」→ deleteSession + キャンセルメッセージ", async () => {
+    await handleConversationMessage(makeTextEvent("キャンセル"), USER_ID, mockEnv);
+
+    expect(mockDeleteSession).toHaveBeenCalledWith(mockEnv.DB, USER_ID);
+    expect(mockUpsertSession).not.toHaveBeenCalled();
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("キャンセル");
+  });
+
+  it("「同意する」以外のテキスト → 再案内（セッション更新なし）", async () => {
+    await handleConversationMessage(makeTextEvent("はい"), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).not.toHaveBeenCalled();
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("同意する");
+    expect(msg.quickReply).toBeDefined();
+  });
+
+  it("画像メッセージ → 再案内（セッション更新なし）", async () => {
+    await handleConversationMessage(makeImageEvent(), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).not.toHaveBeenCalled();
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("同意する");
   });
 });
 
@@ -358,7 +422,7 @@ describe("far_photo ステップ", () => {
     mockGetSession.mockResolvedValue(makeFarPhotoSession(REPORT_UUID));
   });
 
-  it("画像メッセージ → R2 保存 + セッションを location に更新 + 位置情報を求めるメッセージ", async () => {
+  it("画像メッセージ → R2 保存 + セッションを location に更新 + 位置情報 Quick Reply 付きメッセージ", async () => {
     await handleConversationMessage(makeImageEvent("img-far-001"), USER_ID, mockEnv);
 
     expect(mockGetMessageContent).toHaveBeenCalledWith("img-far-001", ACCESS_TOKEN);
@@ -376,10 +440,12 @@ describe("far_photo ステップ", () => {
     // closePhotoKey は引き継がれている
     expect(updated.data.closePhotoKey).toContain("close.jpg");
 
-    // 位置情報を求めるメッセージ
+    // 位置情報を求めるメッセージ（Quick Reply 付き）
     expect(mockReplyMessage).toHaveBeenCalledOnce();
     const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-    expect((messages[0] as { text: string }).text).toContain("位置情報");
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("位置情報");
+    expect(msg.quickReply).toBeDefined();
   });
 
   it("テキストメッセージ → 遠景写真の再案内（R2 保存なし）", async () => {
@@ -412,7 +478,7 @@ describe("location ステップ", () => {
     mockGetSession.mockResolvedValue(makeLocationSession());
   });
 
-  it("位置情報メッセージ → セッションを shooting_date に更新 + 撮影日付を求めるメッセージ", async () => {
+  it("位置情報メッセージ → セッションを shooting_date に更新 + スキップ Quick Reply 付きメッセージ", async () => {
     const LAT = 33.5057;
     const LNG = 132.5595;
     const ADDR = "愛媛県大洲市大洲649";
@@ -433,10 +499,12 @@ describe("location ステップ", () => {
     expect(updated.data.closePhotoKey).toContain("close.jpg");
     expect(updated.data.farPhotoKey).toContain("far.jpg");
 
-    // 撮影日付を求めるメッセージ
+    // 撮影日付を求めるメッセージ（スキップ Quick Reply 付き）
     expect(mockReplyMessage).toHaveBeenCalledOnce();
     const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-    expect((messages[0] as { text: string }).text).toContain("撮影日付");
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("撮影日付");
+    expect(msg.quickReply).toBeDefined();
   });
 
   it("address が null の場合は locationAddress を保存しない", async () => {
@@ -449,13 +517,15 @@ describe("location ステップ", () => {
     expect(updated.data.longitude).toBe(132.5);
   });
 
-  it("テキストメッセージ → 位置情報の再案内（セッション更新なし）", async () => {
+  it("テキストメッセージ → 位置情報の再案内（Quick Reply 付き、セッション更新なし）", async () => {
     await handleConversationMessage(makeTextEvent("テスト"), USER_ID, mockEnv);
 
     expect(mockUpsertSession).not.toHaveBeenCalled();
     expect(mockReplyMessage).toHaveBeenCalledOnce();
     const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-    expect((messages[0] as { text: string }).text).toContain("位置情報");
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("位置情報");
+    expect(msg.quickReply).toBeDefined();
   });
 
   it("画像メッセージ → 位置情報の再案内（セッション更新なし）", async () => {
@@ -491,7 +561,7 @@ function testOptionalStep(opts: {
       mockGetSession.mockResolvedValue(makeOptionalStepSession(step));
     });
 
-    it(`有効なテキスト → ${savedField} を保存して ${nextStep} へ`, async () => {
+    it(`有効なテキスト → ${savedField} を保存して ${nextStep} へ（Quick Reply 付き）`, async () => {
       await handleConversationMessage(makeTextEvent(validText), USER_ID, mockEnv);
 
       expect(mockUpsertSession).toHaveBeenCalledOnce();
@@ -501,7 +571,9 @@ function testOptionalStep(opts: {
 
       expect(mockReplyMessage).toHaveBeenCalledOnce();
       const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-      expect((messages[0] as { text: string }).text).toContain(nextMsgContains);
+      const msg = messages[0] as { text: string; quickReply?: unknown };
+      expect(msg.text).toContain(nextMsgContains);
+      expect(msg.quickReply).toBeDefined();
     });
 
     it("「スキップ」 → フィールド保存なしで次ステップへ", async () => {
@@ -513,23 +585,27 @@ function testOptionalStep(opts: {
       expect(updated.data[savedField]).toBeUndefined();
     });
 
-    it(`無効なテキスト → エラーメッセージ（セッション更新なし）`, async () => {
+    it("無効なテキスト → エラーメッセージ（スキップ Quick Reply 付き、セッション更新なし）", async () => {
       await handleConversationMessage(makeTextEvent(invalidText), USER_ID, mockEnv);
 
       expect(mockUpsertSession).not.toHaveBeenCalled();
       expect(mockReplyMessage).toHaveBeenCalledOnce();
       const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-      expect((messages[0] as { text: string }).text).toContain(invalidErrorContains);
+      const msg = messages[0] as { text: string; quickReply?: unknown };
+      expect(msg.text).toContain(invalidErrorContains);
+      expect(msg.quickReply).toBeDefined();
     });
 
-    it("画像メッセージ → テキスト入力を促す案内（セッション更新なし）", async () => {
+    it("画像メッセージ → テキスト入力を促す案内（スキップ Quick Reply 付き、セッション更新なし）", async () => {
       await handleConversationMessage(makeImageEvent(), USER_ID, mockEnv);
 
       expect(mockUpsertSession).not.toHaveBeenCalled();
       expect(mockUploadImage).not.toHaveBeenCalled();
       expect(mockReplyMessage).toHaveBeenCalledOnce();
       const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-      expect((messages[0] as { text: string }).text).toContain("スキップ");
+      const msg = messages[0] as { text: string; quickReply?: unknown };
+      expect(msg.text).toContain("スキップ");
+      expect(msg.quickReply).toBeDefined();
     });
   });
 }
@@ -585,7 +661,7 @@ testOptionalStep({
 // ---- reporter_phone → confirming サマリー表示 --------------------------------
 
 describe("reporter_phone → confirming 遷移時のサマリーメッセージ", () => {
-  it("入力済みフィールドがサマリーに含まれる", async () => {
+  it("入力済みフィールドがサマリーに含まれる（確認 Quick Reply 付き）", async () => {
     const session = makeOptionalStepSession("reporter_phone");
     session.data.shootingDate = "2026-03-25";
     session.data.remarks = "ひび割れあり";
@@ -596,13 +672,14 @@ describe("reporter_phone → confirming 遷移時のサマリーメッセージ"
 
     expect(mockReplyMessage).toHaveBeenCalledOnce();
     const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-    const text = (messages[0] as { text: string }).text;
-    expect(text).toContain("通報内容の確認");
-    expect(text).toContain("近景写真：受付済み");
-    expect(text).toContain("山田太郎");
-    expect(text).toContain("2026-03-25");
-    expect(text).toContain("送信する");
-    expect(text).toContain("やり直す");
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("通報内容の確認");
+    expect(msg.text).toContain("近景写真：受付済み");
+    expect(msg.text).toContain("山田太郎");
+    expect(msg.text).toContain("2026-03-25");
+    expect(msg.text).toContain("送信する");
+    expect(msg.text).toContain("やり直す");
+    expect(msg.quickReply).toBeDefined();
   });
 
   it("未入力フィールドは「未入力」と表示される", async () => {
@@ -648,18 +725,24 @@ describe("confirming ステップ", () => {
     expect(text).toContain("受付番号");
   });
 
-  it("「やり直す」→ deleteSession（insertReport なし）+ 再開案内メッセージ", async () => {
+  it("「やり直す」→ upsertSession（consent ステップに戻る）+ 利用同意メッセージ", async () => {
     await handleConversationMessage(makeTextEvent("やり直す"), USER_ID, mockEnv);
 
     expect(mockInsertReport).not.toHaveBeenCalled();
-    expect(mockDeleteSession).toHaveBeenCalledWith(mockEnv.DB, USER_ID);
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, restored] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
+    expect(restored.step).toBe("consent");
+    expect(restored.data).toEqual({});
 
     expect(mockReplyMessage).toHaveBeenCalledOnce();
     const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-    expect((messages[0] as { text: string }).text).toContain("通報する");
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("同意する");
+    expect(msg.quickReply).toBeDefined();
   });
 
-  it("その他テキスト → 操作案内のみ（セッション変更なし）", async () => {
+  it("その他テキスト → 操作案内のみ（確認 Quick Reply 付き、セッション変更なし）", async () => {
     await handleConversationMessage(makeTextEvent("確認"), USER_ID, mockEnv);
 
     expect(mockInsertReport).not.toHaveBeenCalled();
@@ -667,7 +750,9 @@ describe("confirming ステップ", () => {
     expect(mockUpsertSession).not.toHaveBeenCalled();
     expect(mockReplyMessage).toHaveBeenCalledOnce();
     const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-    expect((messages[0] as { text: string }).text).toContain("送信する");
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("送信する");
+    expect(msg.quickReply).toBeDefined();
   });
 
   it("画像メッセージ → 操作案内のみ（セッション変更なし）", async () => {

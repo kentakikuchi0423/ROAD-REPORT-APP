@@ -138,7 +138,7 @@ LINE Messaging API の Webhook エンドポイントを実装した（2026-03-25
 
 会話状態の管理ロジックと入力収集フローを実装する。
 
-- [ ] 利用同意・プライバシーポリシー提示（後のStep）
+- [x] 利用同意・プライバシーポリシー提示（Step 5e: 2026-03-26）
 - [x] 近景写真受付（Step 5a: 2026-03-25）
 - [x] 遠景写真受付（Step 5a: 2026-03-25）
 - [x] 位置情報受付（Step 5b: 2026-03-25）
@@ -213,6 +213,40 @@ shooting_date / remarks / reporter_name / reporter_phone の 4 ステップを�
 - テストは `testOptionalStep` ヘルパー関数でパターンを共有（4 ステップ × 4 ケース = 16 テスト）
 - バリデーション関数は既存の `src/lib/validation.ts` を再利用
 - confirming ステップのメッセージ（MSG_REQUEST_CONFIRMING）は仮定義。次 Step で確認フロー実装時に詳細を追加
+
+---
+
+## Step 5e: 利用同意・位置情報 Quick Reply・任意入力 Quick Reply ✅
+
+利用同意フロー・LINE Quick Reply による UX 改善を実装した（2026-03-26）。
+
+- [x] consent ステップ実装（src/app/conversation.ts）
+  - 「通報する」→ consent セッション作成 → 利用同意メッセージ（Quick Reply「同意する」付き）
+  - 「同意する」→ close_photo ステップへ
+  - 「キャンセル」→ deleteSession + キャンセルメッセージ
+  - 「同意する」以外 → 再案内（Quick Reply「同意する」付き）
+- [x] confirming ステップ「やり直す」→ consent ステップへ戻る（upsertSession でリセット）
+- [x] 位置情報 Quick Reply 追加（QUICK_REPLY_LOCATION: type=location アクション）
+  - far_photo → location 遷移メッセージ
+  - location ステップの再案内メッセージ
+- [x] スキップ Quick Reply 追加（QUICK_REPLY_SKIP: type=message アクション）
+  - location → shooting_date 遷移メッセージ
+  - shooting_date / remarks / reporter_name / reporter_phone のエラー・再案内メッセージ
+- [x] 確認 Quick Reply 追加（QUICK_REPLY_CONFIRMING: 「送信する」「やり直す」）
+  - reporter_phone → confirming 遷移メッセージ（サマリー）
+  - confirming ステップの再案内メッセージ
+- [x] テスト更新（tests/app/conversation.test.ts: +4 テスト、計 42 テスト）
+  - consent ステップ専用テスト追加
+  - 「通報する」→ step: "consent" チェックに変更
+  - 「やり直す」→ upsertSession（consent）チェックに変更
+  - Quick Reply の存在確認をテストに追加
+
+### 採用判断メモ
+
+- consent ステップで「通報する」→ 同意確認 → close_photo という流れで CLAUDE.md の「利用同意を取得する」方針を満たす
+- LINE Quick Reply の `type: "location"` アクションを使用してネイティブの位置情報ピッカーを起動
+- 「やり直す」はセッション削除ではなく upsertSession で consent にリセット（再度「通報する」不要）
+- プライバシーポリシー URL は本番ドメイン確定後に追記予定（現在は同意メッセージに概要を記載）
 
 ---
 
