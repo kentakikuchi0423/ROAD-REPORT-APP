@@ -473,6 +473,7 @@ export function renderReportDetail(report: Report): string {
       <dt>補足事項</dt><dd style="white-space:pre-wrap">${val(report.remarks)}</dd>
       <dt>通報者名</dt><dd>${val(report.reporterName)}</dd>
       <dt>電話番号</dt><dd>${val(report.reporterPhone)}</dd>
+      <dt>LINE ユーザー ID</dt><dd>${escapeHtml(report.lineUserId)}</dd>
     </dl>
   </div>
 

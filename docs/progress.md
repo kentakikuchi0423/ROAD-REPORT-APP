@@ -374,7 +374,6 @@ Cloudflare Workers 上に管理者向け Web UI を実装する（サーバー�
 - [x] 管理画面認証実装（ログインフォーム + 署名付き Cookie セッション）
 - [x] 個人情報ログ抑制確認（webhook.ts・conversation.ts ともに問題なし）
 - [ ] Webhook 署名検証の堅牢化（現状で十分・後続 Step で検討）
-- [ ] プライバシーポリシーページ作成（src/app/privacy.ts に雛形あり）
 
 ### 実施内容（2026-03-26）
 
@@ -529,7 +528,6 @@ Cloudflare Workers 上に管理者向け Web UI を実装する（サーバー�
   - Cloudflare リソース作成（D1 / R2 / Workers デプロイ）
   - Secrets 登録手順（wrangler secret put コマンド例）
   - LINE チャンネル設定（Webhook URL・自動応答オフ）
-  - プライバシーポリシー URL の最終設定 TODO
   - セキュリティ確認（.dev.vars の git 除外・HTTPS・R2 非公開）
   - 本番動作確認（会話フロー全ステップ・管理画面全機能）
   - 受け入れ確認・引き渡し項目

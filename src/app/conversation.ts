@@ -51,24 +51,15 @@ const MSG_HOW_TO_START =
 
 /**
  * 利用同意を求めるメッセージ。
- * プライバシーポリシーの URL は BRANDING.privacyPolicyUrl を参照（TODO: 本番 URL 確定後に差し替え）。
  */
 const MSG_REQUEST_CONSENT = [
   "大洲市の道路破損を通報できるアプリです。",
   "",
   `【重要】${BRANDING.disclaimer}`,
   "",
-  "通報にあたり、以下の情報をお預かりします：",
-  "・近景写真・遠景写真（必須）",
-  "・位置情報（必須）",
-  "・撮影日付・補足事項（任意）",
-  "・お名前・電話番号（任意、匿名可）",
-  "・LINE ユーザー ID（会話管理のみに使用）",
-  "",
   "収集した情報は大洲市の道路修繕への通報対応のみに使用します。",
-  "お名前・電話番号の入力は任意で、匿名での通報も可能です。",
   "",
-  `プライバシーポリシー: ${BRANDING.privacyPolicyUrl}`,
+  "通報内容への個別のご回答は原則行っておりませんが、状況によりご連絡をすることがあります。",
   "",
   "内容にご同意いただける場合は「同意する」をタップしてください。",
   "中止する場合は「キャンセル」をタップしてください。",
@@ -92,6 +83,8 @@ const CANCEL_CONFIRM_YES = "はい、中止します";
 const CANCEL_CONFIRM_NO = "いいえ、続けます";
 
 const MSG_REQUEST_CLOSE_PHOTO = [
+  "【進捗 1/7】近景写真（必須）",
+  "",
   "ありがとうございます。通報を開始します。",
   "",
   "まず「近景写真」（破損箇所を写した写真）を1枚送ってください。",
@@ -99,6 +92,8 @@ const MSG_REQUEST_CLOSE_PHOTO = [
 ].join("\n");
 
 const MSG_RETRY_CLOSE_PHOTO = [
+  "【進捗 1/7】近景写真（必須）",
+  "",
   "写真（画像ファイル）を送ってください。",
   "",
   "「近景写真」（破損箇所を写した写真）を1枚送ってください。",
@@ -106,6 +101,8 @@ const MSG_RETRY_CLOSE_PHOTO = [
 ].join("\n");
 
 const MSG_REQUEST_FAR_PHOTO = [
+  "【進捗 2/7】遠景写真（必須）",
+  "",
   "近景写真を受け付けました。",
   "",
   "次に「遠景写真」（周辺の状況がわかる写真）を1枚送ってください。",
@@ -113,6 +110,8 @@ const MSG_REQUEST_FAR_PHOTO = [
 ].join("\n");
 
 const MSG_RETRY_FAR_PHOTO = [
+  "【進捗 2/7】遠景写真（必須）",
+  "",
   "写真（画像ファイル）を送ってください。",
   "",
   "「遠景写真」（周辺の状況がわかる写真）を1枚送ってください。",
@@ -120,6 +119,8 @@ const MSG_RETRY_FAR_PHOTO = [
 ].join("\n");
 
 const MSG_REQUEST_LOCATION = [
+  "【進捗 3/7】位置情報（必須）",
+  "",
   "遠景写真を受け付けました。",
   "",
   "次に「位置情報」を送ってください。",
@@ -127,11 +128,15 @@ const MSG_REQUEST_LOCATION = [
 ].join("\n");
 
 const MSG_RETRY_LOCATION = [
+  "【進捗 3/7】位置情報（必須）",
+  "",
   "位置情報を送ってください。",
   "下のボタン、またはLINEのメニュー（＋）から「位置情報」をタップして送信してください。",
 ].join("\n");
 
 const MSG_REQUEST_SHOOTING_DATE = [
+  "【進捗 4/7】撮影日付（任意）",
+  "",
   "位置情報を受け付けました。",
   "",
   "「撮影日付」を選択してください（任意）。",
@@ -139,19 +144,24 @@ const MSG_REQUEST_SHOOTING_DATE = [
 ].join("\n");
 
 const MSG_REQUEST_REMARKS = [
+  "【進捗 5/7】補足事項（任意）",
+  "",
   "「補足事項」があれば入力してください（任意・500文字以内）。",
   "",
   "スキップする場合は「スキップ」をタップ、中止する場合は「通報を中止する」をタップしてください。",
 ].join("\n");
 
 const MSG_REQUEST_REPORTER_NAME = [
+  "【進捗 6/7】お名前（任意）",
+  "",
   "「お名前」を入力してください（任意）。",
-  "匿名での通報も可能です。",
   "",
   "スキップする場合は「スキップ」をタップ、中止する場合は「通報を中止する」をタップしてください。",
 ].join("\n");
 
 const MSG_REQUEST_REPORTER_PHONE = [
+  "【進捗 7/7】電話番号（任意）",
+  "",
   "「電話番号」を入力してください（任意）。",
   "形式：0896-24-1111",
   "",
@@ -339,7 +349,12 @@ export async function handleConversationMessage(
   if (!replyToken) return;
 
   const msgType = event.message.type;
-  if (msgType !== "text" && msgType !== "image" && msgType !== "location") {
+  if (
+    msgType !== "text" &&
+    msgType !== "image" &&
+    msgType !== "video" &&
+    msgType !== "location"
+  ) {
     return;
   }
 
@@ -978,7 +993,7 @@ function buildSummaryMessage(data: ConversationSession["data"]): string {
     `位置情報：${data.locationAddress ?? "受付済み（住所なし）"}`,
     `撮影日付：${data.shootingDate ?? "未入力"}`,
     `補足事項：${data.remarks ?? "未入力"}`,
-    `お名前：${data.reporterName ?? "匿名"}`,
+    `お名前：${data.reporterName ?? "未入力"}`,
     `電話番号：${data.reporterPhone ?? "未入力"}`,
     "",
     "「送信する」をタップして通報を完了してください。",
@@ -998,6 +1013,8 @@ function buildCompletionMessage(receiptNumber: string): string {
     "",
     "この番号を控えておいてください。",
     `アプリに関するお問い合わせは ${BRANDING.contactEmail} までご連絡ください。`,
+    "",
+    `※本アプリは『${BRANDING.developer}』が個人で開発したものです。大洲市の公式サービスではないため、大洲市へのお問い合わせはご遠慮ください。`,
   ].join("\n");
 }
 

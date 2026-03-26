@@ -38,17 +38,7 @@ Cloudflare Workers Secrets に以下を登録する（`wrangler secret put <KEY>
 
 ---
 
-## 4. プライバシーポリシー・URL 最終設定
-
-- [ ] 本番ドメインが確定したら `src/app/conversation.ts` の `MSG_REQUEST_CONSENT` に `/privacy` の完全 URL を追記
-  - 現在は TODO コメントあり（`// TODO: BASE_URL 確定後に差し替え`）
-  - 例: `"プライバシーポリシー: https://ozu-road-report.example.com/privacy"`
-- [ ] `/privacy` ページにアクセスして内容（住所・電話番号）が正しいことを確認
-- [ ] プライバシーポリシーのお問い合わせ先（大洲市役所の連絡先）が最新であることを確認
-
----
-
-## 5. セキュリティ確認
+## 4. セキュリティ確認
 
 - [ ] `.dev.vars` が git に含まれていないことを確認（`git status` でトラッキングされていないこと）
   - 過去にコミットされた場合は `git rm --cached .dev.vars` でトラッキング解除・再コミット

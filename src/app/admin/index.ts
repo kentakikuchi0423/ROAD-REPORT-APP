@@ -118,6 +118,7 @@ function buildCsv(reports: Report[]): string {
     "補足事項",
     "氏名",
     "電話番号",
+    "LINE ユーザー ID",
   ];
 
   const rows = reports.map((r) =>
@@ -133,6 +134,7 @@ function buildCsv(reports: Report[]): string {
       csvEscape(r.remarks),
       csvEscape(r.reporterName),
       csvEscape(r.reporterPhone),
+      csvEscape(r.lineUserId),
     ].join(","),
   );
 
