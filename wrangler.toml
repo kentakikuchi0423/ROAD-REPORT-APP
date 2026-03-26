@@ -13,7 +13,7 @@ local_protocol = "http"
 [[d1_databases]]
 binding = "DB"
 database_name = "ozu-road-report-db"
-database_id = "TODO: wrangler d1 create で取得"
+database_id = "00000000-0000-0000-0000-000000000000" # ローカル開発用ダミー値。本番は wrangler d1 create で取得した ID に変更する
 
 # R2 バケット（bucket_name は `wrangler r2 bucket create ozu-road-report-images` 実行後に確認）
 [[r2_buckets]]

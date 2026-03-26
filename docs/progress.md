@@ -423,3 +423,38 @@ Cloudflare へのデプロイと本番環境の設定を行う。
 - [ ] 環境変数・シークレット設定
 - [ ] LINE チャンネル本番設定
 - [ ] 動作確認・受け入れテスト
+
+---
+
+## Step 9b: ローカル確認環境の整備 ✅（2026-03-26）
+
+`npx wrangler dev` 後にブラウザで何も表示されない問題を解消した。
+
+### 原因
+
+- `/` に対するルートが未定義（404 を返すのみ）
+- `wrangler.toml` の `database_id` が UUID 形式でなく起動エラーの原因になりえた
+- `.dev.vars`（実際のシークレット値を含む）が `.gitignore` 未登録でコミット済みだった
+
+### 実施内容
+
+- [x] `src/app/index.ts`: `GET /` トップページ追加（URL 案内・主要リンク一覧）
+- [x] `src/app/index.ts`: `GET /healthz` ヘルスチェックエンドポイント追加
+- [x] `wrangler.toml`: `database_id` をダミー UUID に変更（ローカル開発用）
+- [x] `.gitignore`: `.dev.vars` を追加（シークレット漏洩防止）
+- [x] `.env.example`: ダミー値のみのテンプレートを作成
+- [x] `package.json`: `d1:migrate:local` スクリプト追加
+- [x] `README.md`: ローカル確認手順を新規作成
+
+### セキュリティ注意
+
+- `.dev.vars` がすでに git 管理下に入っている。シークレットのローテーションを検討すること
+- `git rm --cached .dev.vars` を実行してトラッキングを解除し、再コミットが必要
+
+### ローカル確認手順（概要）
+
+```bash
+npm run d1:migrate:local   # D1 migration 適用（初回・migration 追加時）
+npm run dev                # 開発サーバー起動
+# → http://localhost:8787/ を開く
+```

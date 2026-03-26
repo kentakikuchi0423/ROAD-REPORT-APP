@@ -10,6 +10,8 @@ dist/
 .env
 .env.local
 .env.*.local
+.dev.vars        # Wrangler ローカル開発用シークレット（実際の秘密情報を含む）
+.dev.vars        # Wrangler ローカル開発用シークレット（実際の秘密情報を含む）
 
 # OS
 .DS_Store
