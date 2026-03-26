@@ -7,6 +7,7 @@
  */
 
 import type { Env } from "../../types";
+import { ADMIN_BASE_PATH } from "./config";
 
 // ---- 定数 -------------------------------------------------------------------
 
@@ -81,31 +82,43 @@ export function getSessionCookieValue(cookieHeader: string | null): string | nul
 /**
  * 認証ミドルウェア。
  * セッション Cookie が有効なら null（処理続行）を返す。
- * 無効なら /admin/login へのリダイレクトを返す。
+ * 無効な場合、mode に応じて以下を返す:
+ *   "page" → ログインページへの 302 リダイレクト（HTML ページ向け）
+ *   "api"  → 401 JSON レスポンス（fetch API 向け: PATCH / DELETE 等）
  *
  * 注意: ユーザー名・パスワード等の個人情報をログに出さないこと。
  */
 export async function requireAuth(
   request: Request,
   env: Env,
+  mode: "page" | "api" = "page",
 ): Promise<Response | null> {
   const cookieHeader = request.headers.get("Cookie");
   const token = getSessionCookieValue(cookieHeader);
   if (token && (await verifySessionToken(token, env.ADMIN_SESSION_SECRET))) {
     return null; // 認証済み
   }
-  return Response.redirect(new URL("/admin/login", request.url).toString(), 302);
+  if (mode === "api") {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
+  return Response.redirect(
+    new URL(`${ADMIN_BASE_PATH}/login`, request.url).toString(),
+    302,
+  );
 }
 
 /** ログイン成功時の Set-Cookie ヘッダー値を返す */
 export async function buildSessionCookieHeader(secret: string): Promise<string> {
   const token = await createSessionToken(secret);
-  return `${SESSION_COOKIE_NAME}=${token}; HttpOnly; SameSite=Strict; Path=/admin; Max-Age=${SESSION_DURATION_MS / 1000}`;
+  return `${SESSION_COOKIE_NAME}=${token}; HttpOnly; SameSite=Strict; Path=${ADMIN_BASE_PATH}; Max-Age=${SESSION_DURATION_MS / 1000}`;
 }
 
 /** ログアウト用の Set-Cookie ヘッダー値（Cookie 削除）を返す */
 export function buildLogoutCookieHeader(): string {
-  return `${SESSION_COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/admin; Max-Age=0`;
+  return `${SESSION_COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=${ADMIN_BASE_PATH}; Max-Age=0`;
 }
 
 // ---- 内部ヘルパー ------------------------------------------------------------

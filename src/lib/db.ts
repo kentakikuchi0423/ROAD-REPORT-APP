@@ -230,7 +230,7 @@ export async function deleteSession(
 // ---- 管理画面用クエリ --------------------------------------------------------
 
 export interface GetReportsOptions {
-  status?: ReportStatus;
+  statuses?: ReportStatus[]; // 空配列または未指定 → 全件
   limit: number;
   offset: number;
 }
@@ -241,26 +241,28 @@ export interface ReportsPage {
 }
 
 /**
- * 通報一覧を取得する（status フィルタ・ページネーション対応）。
+ * 通報一覧を取得する（statuses フィルタ・ページネーション対応）。
+ * statuses が空配列または未指定の場合は全件取得する。
  */
 export async function getReports(
   db: D1Database,
   options: GetReportsOptions,
 ): Promise<ReportsPage> {
-  const { status, limit, offset } = options;
+  const { statuses, limit, offset } = options;
 
-  if (status !== undefined) {
+  if (statuses && statuses.length > 0) {
+    const ph = statuses.map(() => "?").join(", ");
     const countRow = await db
-      .prepare("SELECT COUNT(*) AS cnt FROM reports WHERE status = ?")
-      .bind(status)
+      .prepare(`SELECT COUNT(*) AS cnt FROM reports WHERE status IN (${ph})`)
+      .bind(...statuses)
       .first<{ cnt: number }>();
     const total = countRow?.cnt ?? 0;
 
     const rows = await db
       .prepare(
-        "SELECT * FROM reports WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        `SELECT * FROM reports WHERE status IN (${ph}) ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       )
-      .bind(status, limit, offset)
+      .bind(...statuses, limit, offset)
       .all<ReportRow>();
 
     return { reports: rows.results.map(rowToReport), total };
@@ -296,16 +298,17 @@ export async function getReportById(
 
 /**
  * 通報を全件取得する（CSV エクスポート用・ページネーションなし）。
- * status を指定するとフィルタリングする。
+ * statuses が非空のときフィルタリングする。空配列または未指定の場合は全件取得する。
  */
 export async function getAllReports(
   db: D1Database,
-  status?: ReportStatus,
+  statuses?: ReportStatus[],
 ): Promise<Report[]> {
-  if (status !== undefined) {
+  if (statuses && statuses.length > 0) {
+    const ph = statuses.map(() => "?").join(", ");
     const rows = await db
-      .prepare("SELECT * FROM reports WHERE status = ? ORDER BY created_at DESC")
-      .bind(status)
+      .prepare(`SELECT * FROM reports WHERE status IN (${ph}) ORDER BY created_at DESC`)
+      .bind(...statuses)
       .all<ReportRow>();
     return rows.results.map(rowToReport);
   }
@@ -324,7 +327,7 @@ export async function deleteReport(db: D1Database, id: number): Promise<boolean>
     .prepare("DELETE FROM reports WHERE id = ?")
     .bind(id)
     .run();
-  return (result.meta.changes ?? 0) > 0;
+  return result.meta.changes > 0;
 }
 
 /**

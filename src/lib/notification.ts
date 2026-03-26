@@ -50,7 +50,6 @@ class LineAdminNotifier implements AdminNotifier {
 // ---- NULL実装（通知不要・未設定時） ------------------------------------------
 
 class NullAdminNotifier implements AdminNotifier {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async notifyNewReport(_report: Report): Promise<void> {
     // LINE_ADMIN_USER_ID 未設定のため通知しない
   }

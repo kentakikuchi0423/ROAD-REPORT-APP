@@ -26,7 +26,6 @@ import {
 } from "../../lib/db";
 import { downloadImage, deleteImage } from "../../lib/r2";
 import {
-  renderAdminTop,
   renderReportList,
   renderReportDetail,
   renderErrorPage,
@@ -38,6 +37,7 @@ import {
   buildSessionCookieHeader,
   buildLogoutCookieHeader,
 } from "./auth";
+import { ADMIN_BASE_PATH } from "./config";
 
 // ---- 定数 -------------------------------------------------------------------
 
@@ -177,7 +177,7 @@ export async function handleAdmin(
       return new Response(null, {
         status: 302,
         headers: {
-          Location: "/admin/login",
+          Location: `${ADMIN_BASE_PATH}/login`,
           "Set-Cookie": buildLogoutCookieHeader(),
         },
       });
@@ -185,16 +185,21 @@ export async function handleAdmin(
 
     // ---- 認証が必要なルート ---------------------------------------------------
 
-    const authResponse = await requireAuth(request, env);
+    // PATCH / DELETE は fetch() で呼ぶ API のため、未認証時は 401 JSON を返す
+    const authMode = method === "PATCH" || method === "DELETE" ? "api" : "page";
+    const authResponse = await requireAuth(request, env, authMode);
     if (authResponse) return authResponse;
 
-    // GET /admin または GET /admin/
+    // GET /admin または GET /admin/ → /admin/reports へリダイレクト
     if (
       method === "GET" &&
       (segments.length === 2 ||
         (segments.length === 3 && segments[2] === ""))
     ) {
-      return htmlResponse(renderAdminTop());
+      return Response.redirect(
+        new URL(`${ADMIN_BASE_PATH}/reports`, request.url).toString(),
+        302,
+      );
     }
 
     // /admin/reports/*
@@ -294,7 +299,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   return new Response(null, {
     status: 302,
     headers: {
-      Location: "/admin",
+      Location: `${ADMIN_BASE_PATH}/reports`,
       "Set-Cookie": sessionCookie,
     },
   });
@@ -306,10 +311,9 @@ async function handleCsvExport(
   env: Env,
   searchParams: URLSearchParams,
 ): Promise<Response> {
-  const rawStatus = searchParams.get("status") ?? "";
-  const status = isValidStatus(rawStatus) ? rawStatus : undefined;
+  const statuses = searchParams.getAll("status").filter(isValidStatus);
 
-  const reports = await getAllReports(env.DB, status);
+  const reports = await getAllReports(env.DB, statuses);
 
   // ファイル名の日付部分（JST 基準）
   const now = new Date();
@@ -381,9 +385,8 @@ async function handleReportList(
   env: Env,
   searchParams: URLSearchParams,
 ): Promise<Response> {
-  // ステータスフィルタ
-  const rawStatus = searchParams.get("status") ?? "";
-  const status = isValidStatus(rawStatus) ? rawStatus : undefined;
+  // ステータスフィルタ（複数選択対応）
+  const statuses = searchParams.getAll("status").filter(isValidStatus);
 
   // ページネーション
   const rawPage = searchParams.get("page") ?? "1";
@@ -391,12 +394,12 @@ async function handleReportList(
   const offset = (currentPage - 1) * PAGE_SIZE;
 
   const result = await getReports(env.DB, {
-    status,
+    statuses,
     limit: PAGE_SIZE,
     offset,
   });
 
-  return htmlResponse(renderReportList(result, currentPage, status));
+  return htmlResponse(renderReportList(result, currentPage, statuses));
 }
 
 async function handleReportDetail(env: Env, id: number): Promise<Response> {

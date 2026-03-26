@@ -119,11 +119,18 @@ npx wrangler dev
 
 | URL | 内容 |
 |---|---|
-| http://localhost:8787/ | トップページ（URL 一覧） |
+| http://localhost:8787/ | → 管理画面ログインへリダイレクト |
 | http://localhost:8787/healthz | ヘルスチェック（JSON） |
 | http://localhost:8787/privacy | プライバシーポリシー |
+
+### 管理画面（開発者向け）
+
+| URL | 内容 |
+|---|---|
 | http://localhost:8787/admin/login | 管理画面ログイン |
 | http://localhost:8787/admin/reports | 通報一覧（ログイン後） |
+
+> **注意**: 管理画面 URL は管理者のみが知る運用を前提としています。公開向けのドキュメントや画面には記載しないでください。
 
 ---
 

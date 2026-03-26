@@ -8,6 +8,7 @@
 import type { Report, ReportStatus } from "../../types";
 import type { ReportsPage } from "../../lib/db";
 import { BRANDING } from "../../lib/branding";
+import { ADMIN_BASE_PATH } from "./config";
 
 // ---- 定数 -------------------------------------------------------------------
 
@@ -77,19 +78,55 @@ const COMMON_CSS = `
     --color-brand: #2a6496;
     --color-brand-dark: #1a4066;
   }
+  * { box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
     max-width: 1100px;
     margin: 0 auto;
-    padding: 1.5rem;
+    padding: 0 1.5rem 2rem;
     color: #333;
     line-height: 1.7;
+    background: #f8f9fa;
   }
-  h1 { font-size: 1.4rem; border-bottom: 2px solid var(--color-brand); padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
-  h2 { font-size: 1.1rem; margin-top: 1.5rem; }
+  .site-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.65rem 0;
+    margin: 0 -1.5rem 1.75rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    background: var(--color-brand);
+    color: #fff;
+  }
+  .site-header__title {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #fff;
+    text-decoration: none;
+    letter-spacing: 0.01em;
+  }
+  .site-header__label {
+    font-size: 0.78rem;
+    font-weight: normal;
+    opacity: 0.8;
+    margin-left: 0.5rem;
+  }
+  .logout-btn {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #fff;
+    padding: 0.25rem 0.8rem;
+    font-size: 0.82rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .logout-btn:hover { background: rgba(255,255,255,0.25); }
+  h1 { font-size: 1.3rem; border-bottom: 2px solid var(--color-brand); padding-bottom: 0.45rem; margin-bottom: 1.25rem; margin-top: 0; }
+  h2 { font-size: 1.05rem; margin-top: 1.25rem; }
   a { color: var(--color-brand); }
   a:hover { color: var(--color-brand-dark); }
-  .nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
   .note {
     background: #fff3cd;
     border-left: 4px solid #ffc107;
@@ -97,6 +134,7 @@ const COMMON_CSS = `
     margin: 1rem 0;
     font-size: 0.88rem;
   }
+  .card { background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
   table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
   th, td { border: 1px solid #dee2e6; padding: 0.5rem 0.75rem; text-align: left; vertical-align: middle; }
   th { background: #f1f3f5; white-space: nowrap; }
@@ -127,7 +165,7 @@ const COMMON_CSS = `
   dl { display: grid; grid-template-columns: 180px 1fr; gap: 0.5rem 1rem; margin: 0; }
   dt { font-weight: bold; color: #555; }
   dd { margin: 0; }
-  .section { border: 1px solid #dee2e6; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+  .section { background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
   .section h2 { margin-top: 0; border-bottom: 1px solid #dee2e6; padding-bottom: 0.4rem; padding-left: 0.5rem; border-left: 3px solid var(--color-brand); }
   .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   .photo-card { border: 1px solid #dee2e6; background: #f8f9fa; padding: 0.75rem; text-align: center; border-radius: 6px; display: flex; flex-direction: column; gap: 0.5rem; }
@@ -148,15 +186,35 @@ const COMMON_CSS = `
   .status-form button:hover { background: var(--color-brand-dark); }
   .status-msg { font-size: 0.88rem; color: #198754; margin-left: 0.5rem; }
   .back-link { margin-bottom: 1rem; display: inline-block; font-size: 0.9rem; }
+  /* テーブル横スクロール */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* フィルタフォーム: チェックボックスグループ */
+  .filter-checkboxes { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: center; }
+  .filter-checkboxes label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.88rem; cursor: pointer; white-space: nowrap; }
+  .filter-checkboxes input[type="checkbox"] { width: 1rem; height: 1rem; cursor: pointer; }
+  @media (max-width: 640px) {
+    body { padding: 0 0.75rem 2rem; }
+    .site-header { flex-wrap: wrap; gap: 0.5rem; }
+    dl { grid-template-columns: 1fr; }
+    dt { margin-top: 0.4rem; }
+    .photo-grid { grid-template-columns: 1fr; }
+    .logout-btn { min-height: 44px; }
+    .filter-form button { min-height: 44px; }
+    .status-form button { min-height: 44px; }
+    .danger-btn { min-height: 44px; width: 100%; }
+    .photo-download-link { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+    .filter-form { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+    .filter-checkboxes { gap: 0.4rem 1rem; }
+  }
 `;
 
 function renderLayout(title: string, body: string): string {
-  const logoutNav = `
-  <nav style="display:flex;justify-content:flex-end;margin-bottom:0.5rem;font-size:0.85rem">
-    <form method="POST" action="/admin/logout" style="margin:0">
-      <button type="submit" style="background:none;border:none;color:#2a6496;cursor:pointer;padding:0;font-size:0.85rem;text-decoration:underline">ログアウト</button>
-    </form>
-  </nav>`;
+  const header = `<header class="site-header">
+  <span class="site-header__title">${escapeHtml(BRANDING.appName)}<span class="site-header__label">管理画面</span></span>
+  <form method="POST" action="${ADMIN_BASE_PATH}/logout" style="margin:0">
+    <button type="submit" class="logout-btn">ログアウト</button>
+  </form>
+</header>`;
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -166,7 +224,7 @@ function renderLayout(title: string, body: string): string {
   <style>${COMMON_CSS}</style>
 </head>
 <body>
-${logoutNav}
+${header}
 ${body}
 </body>
 </html>`;
@@ -201,58 +259,55 @@ export function renderLoginPage(error?: string): string {
   <div class="login-box">
     <h1>管理画面 ログイン</h1>
     ${errorHtml}
-    <form method="POST" action="/admin/login">
+    <form method="POST" action="${ADMIN_BASE_PATH}/login">
       <label for="username">ユーザー名</label>
       <input type="text" id="username" name="username" autocomplete="username" required>
       <label for="password">パスワード</label>
       <input type="password" id="password" name="password" autocomplete="current-password" required>
       <button type="submit">ログイン</button>
     </form>
-    <p class="footer">${BRANDING.appName}（個人開発: ${BRANDING.developer}）</p>
+    <p class="footer">${BRANDING.appName}</p>
   </div>
 </body>
 </html>`;
-}
-
-/** 管理トップページ */
-export function renderAdminTop(): string {
-  const body = `
-  <h1>${BRANDING.appName} 管理画面</h1>
-  <div class="section">
-    <h2>メニュー</h2>
-    <ul>
-      <li><a href="/admin/reports">通報一覧</a> — 受け付けた通報の一覧を確認・ステータス管理</li>
-    </ul>
-  </div>
-  <p style="margin-top:2rem;font-size:0.85rem;color:#666;">${BRANDING.appName} 管理画面（個人開発: ${BRANDING.developer}）</p>
-`;
-  return renderLayout("トップ", body);
 }
 
 /** 通報一覧ページ */
 export function renderReportList(
   page: ReportsPage,
   currentPage: number,
-  status: ReportStatus | undefined,
+  statuses: ReportStatus[],
 ): string {
   const totalPages = Math.max(1, Math.ceil(page.total / PAGE_SIZE));
 
-  // フィルタフォーム
-  const csvHref = status
-    ? `/admin/reports/csv?status=${status}`
-    : "/admin/reports/csv";
+  // ステータスクエリ文字列（複数対応）
+  const statusQs = statuses.map((s) => `status=${encodeURIComponent(s)}`).join("&");
+
+  // フィルタフォーム（チェックボックス）
+  const allStatuses: ReportStatus[] = ["pending", "in_progress", "resolved", "rejected"];
+  const allStatusLabels: Record<ReportStatus, string> = {
+    pending: "受付済み",
+    in_progress: "対応中",
+    resolved: "対応完了",
+    rejected: "対応不要",
+  };
+  const checkboxes = allStatuses
+    .map((s) => {
+      const checked = statuses.includes(s) ? " checked" : "";
+      return `<label><input type="checkbox" name="status" value="${s}"${checked}> ${allStatusLabels[s]}</label>`;
+    })
+    .join("\n        ");
+  const csvHref = statusQs
+    ? `${ADMIN_BASE_PATH}/reports/csv?${statusQs}`
+    : `${ADMIN_BASE_PATH}/reports/csv`;
   const filterForm = `
-  <form class="filter-form" method="GET" action="/admin/reports">
-    <label for="status-filter">ステータス:</label>
-    <select id="status-filter" name="status">
-      <option value=""${!status ? " selected" : ""}>全て</option>
-      <option value="pending"${status === "pending" ? " selected" : ""}>受付済み</option>
-      <option value="in_progress"${status === "in_progress" ? " selected" : ""}>対応中</option>
-      <option value="resolved"${status === "resolved" ? " selected" : ""}>対応完了</option>
-      <option value="rejected"${status === "rejected" ? " selected" : ""}>対応不要</option>
-    </select>
+  <form class="filter-form" method="GET" action="${ADMIN_BASE_PATH}/reports">
+    <span class="filter-label" style="font-size:0.88rem">ステータス:</span>
+    <div class="filter-checkboxes">
+      ${checkboxes}
+    </div>
     <button type="submit">絞り込み</button>
-    ${status ? `<a href="/admin/reports">リセット</a>` : ""}
+    ${statuses.length > 0 ? `<a href="${ADMIN_BASE_PATH}/reports">リセット</a>` : ""}
     <a href="${csvHref}" style="padding:0.35rem 0.65rem;font-size:0.88rem;border:1px solid #198754;border-radius:4px;color:#198754;text-decoration:none;white-space:nowrap">CSV出力</a>
     <span style="margin-left:auto;color:#666;font-size:0.88rem">${page.total} 件</span>
   </form>`;
@@ -271,7 +326,7 @@ export function renderReportList(
               : `<span class="muted">匿名</span>`;
             const rowClass = CLOSED_STATUSES.has(r.status) ? ' class="row--closed"' : '';
             return `<tr${rowClass}>
-          <td><a href="/admin/reports/${r.id}">${escapeHtml(r.receiptNumber)}</a></td>
+          <td><a href="${ADMIN_BASE_PATH}/reports/${r.id}">${escapeHtml(r.receiptNumber)}</a></td>
           <td style="white-space:nowrap">${formatJst(r.createdAt)}</td>
           <td class="status-badge-cell">${renderStatusBadge(r.status)}</td>
           <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${addr}</td>
@@ -292,14 +347,14 @@ export function renderReportList(
           .join("\n");
 
   // ページネーション
-  const statusParam = status ? `&status=${status}` : "";
+  const pageQsSuffix = statusQs ? `&${statusQs}` : "";
   const prevLink =
     currentPage > 1
-      ? `<a href="/admin/reports?page=${currentPage - 1}${statusParam}">◀ 前へ</a>`
+      ? `<a href="${ADMIN_BASE_PATH}/reports?page=${currentPage - 1}${pageQsSuffix}">◀ 前へ</a>`
       : `<span>◀ 前へ</span>`;
   const nextLink =
     currentPage < totalPages
-      ? `<a href="/admin/reports?page=${currentPage + 1}${statusParam}">次へ ▶</a>`
+      ? `<a href="${ADMIN_BASE_PATH}/reports?page=${currentPage + 1}${pageQsSuffix}">次へ ▶</a>`
       : `<span>次へ ▶</span>`;
   const pagination = `
   <div class="pagination">
@@ -329,7 +384,7 @@ export function renderReportList(
       var badgeCell = row ? row.querySelector('.status-badge-cell') : null;
       btn.disabled = true;
       btn.textContent = '...';
-      fetch('/admin/reports/' + id + '/status', {
+      fetch('${ADMIN_BASE_PATH}/reports/' + id + '/status', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: select.value })
@@ -356,25 +411,28 @@ export function renderReportList(
 </script>`;
 
   const body = `
-  <div class="nav"><a href="/admin">← 管理トップ</a></div>
   <h1>通報一覧</h1>
-  ${filterForm}
-  <table>
-    <thead>
-      <tr>
-        <th>受付番号</th>
-        <th>受付日時</th>
-        <th>ステータス</th>
-        <th>住所</th>
-        <th>通報者名</th>
-        <th>ステータス変更</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-    </tbody>
-  </table>
-  ${pagination}
+  <div class="card">
+    ${filterForm}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>受付番号</th>
+            <th>受付日時</th>
+            <th>ステータス</th>
+            <th>住所</th>
+            <th>通報者名</th>
+            <th>ステータス変更</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+    ${pagination}
+  </div>
   ${listScript}
 `;
   return renderLayout("通報一覧", body);
@@ -408,7 +466,7 @@ export function renderReportDetail(report: Report): string {
     btn.disabled = true;
     btn.textContent = '更新中...';
     if (msg) msg.style.display = 'none';
-    fetch('/admin/reports/${report.id}/status', {
+    fetch('${ADMIN_BASE_PATH}/reports/${report.id}/status', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: select.value })
@@ -431,7 +489,7 @@ export function renderReportDetail(report: Report): string {
 </script>`;
 
   const body = `
-  <a class="back-link" href="/admin/reports">← 一覧へ戻る</a>
+  <a class="back-link" href="${ADMIN_BASE_PATH}/reports">← 一覧へ戻る</a>
   <h1>通報詳細 — ${escapeHtml(report.receiptNumber)}</h1>
 
   <div class="section">
@@ -482,24 +540,24 @@ export function renderReportDetail(report: Report): string {
     <div class="photo-grid">
       <div class="photo-card">
         <p class="photo-label">近景写真</p>
-        <a href="/admin/reports/${report.id}/images/close" target="_blank" rel="noopener" class="photo-preview-link">
-          <img src="/admin/reports/${report.id}/images/close" alt="近景写真" class="photo-thumb" loading="lazy">
+        <a href="${ADMIN_BASE_PATH}/reports/${report.id}/images/close" target="_blank" rel="noopener" class="photo-preview-link">
+          <img src="${ADMIN_BASE_PATH}/reports/${report.id}/images/close" alt="近景写真" class="photo-thumb" loading="lazy">
         </a>
-        <a class="photo-download-link" href="/admin/reports/${report.id}/images/close?dl=1" download="${escapeHtml(`close_${report.receiptNumber}.jpg`)}">ダウンロード</a>
+        <a class="photo-download-link" href="${ADMIN_BASE_PATH}/reports/${report.id}/images/close?dl=1" download="${escapeHtml(`close_${report.receiptNumber}.jpg`)}">ダウンロード</a>
       </div>
       <div class="photo-card">
         <p class="photo-label">遠景写真</p>
-        <a href="/admin/reports/${report.id}/images/far" target="_blank" rel="noopener" class="photo-preview-link">
-          <img src="/admin/reports/${report.id}/images/far" alt="遠景写真" class="photo-thumb" loading="lazy">
+        <a href="${ADMIN_BASE_PATH}/reports/${report.id}/images/far" target="_blank" rel="noopener" class="photo-preview-link">
+          <img src="${ADMIN_BASE_PATH}/reports/${report.id}/images/far" alt="遠景写真" class="photo-thumb" loading="lazy">
         </a>
-        <a class="photo-download-link" href="/admin/reports/${report.id}/images/far?dl=1" download="${escapeHtml(`far_${report.receiptNumber}.jpg`)}">ダウンロード</a>
+        <a class="photo-download-link" href="${ADMIN_BASE_PATH}/reports/${report.id}/images/far?dl=1" download="${escapeHtml(`far_${report.receiptNumber}.jpg`)}">ダウンロード</a>
       </div>
     </div>
   </div>
 
   <div class="section danger-section">
-    <h2>危険な操作</h2>
-    <p style="font-size:0.9rem;color:#666;margin-top:0">通報データと写真（R2）を削除します。この操作は取り消せません。</p>
+    <h2>削除</h2>
+    <p style="font-size:0.9rem;color:#666;margin-top:0">通報データと添付写真をすべて削除します。この操作は取り消せません。</p>
     <button id="delete-btn" class="danger-btn" type="button">この通報を削除する</button>
   </div>
   ${statusUpdateScript}
@@ -508,13 +566,13 @@ export function renderReportDetail(report: Report): string {
   var btn = document.getElementById('delete-btn');
   if (!btn) return;
   btn.addEventListener('click', function() {
-    if (!confirm('通報「${escapeHtml(report.receiptNumber)}」を削除しますか？\\nR2の写真も削除されます。この操作は取り消せません。')) return;
+    if (!confirm('通報「${escapeHtml(report.receiptNumber)}」を削除しますか？\\n添付写真も含めてすべて削除されます。この操作は取り消せません。')) return;
     btn.disabled = true;
     btn.textContent = '削除中...';
-    fetch('/admin/reports/${report.id}', { method: 'DELETE' })
+    fetch('${ADMIN_BASE_PATH}/reports/${report.id}', { method: 'DELETE' })
       .then(function(res) {
         if (res.ok) {
-          location.href = '/admin/reports';
+          location.href = '${ADMIN_BASE_PATH}/reports';
         } else {
           throw new Error('削除に失敗しました（' + res.status + '）');
         }
@@ -536,7 +594,7 @@ export function renderErrorPage(code: number, message: string): string {
   const body = `
   <h1>${code} エラー</h1>
   <p>${escapeHtml(message)}</p>
-  <p><a href="/admin/reports">通報一覧へ戻る</a></p>
+  <p><a href="${ADMIN_BASE_PATH}/reports">通報一覧へ戻る</a></p>
 `;
   return renderLayout(`${code} エラー`, body);
 }

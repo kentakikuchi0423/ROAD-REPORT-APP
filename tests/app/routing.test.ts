@@ -57,14 +57,12 @@ describe("fetch handler routing", () => {
     vi.unstubAllGlobals();
   });
 
-  it("GET / はトップページ HTML（200 + text/html）を返す", async () => {
+  it("GET / は /admin/login へ 302 リダイレクトする", async () => {
     const req = new Request("http://localhost/", { method: "GET" });
     const res = await worker.fetch(req, mockEnv, mockCtx);
 
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toMatch(/text\/html/);
-    const text = await res.text();
-    expect(text).toContain("大洲市");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toContain("/admin/login");
   });
 
   it("GET /healthz は 200 + application/json を返す", async () => {

@@ -709,3 +709,106 @@ LINE キャンセル確認フロー・管理画面 UI 統一・写真プレビ�
 - consent ステップの「キャンセル」は即時キャンセルのまま維持（確認不要な導線）
 - R2 の公開設定不要・署名 URL 不要：Workers が認証 Cookie 確認後 R2 からプロキシする設計を維持
 - 写真プレビューはシンプルに `<img>` + 新タブリンクの組み合わせ（外部ライブラリ不使用・保守性優先）
+
+---
+
+## Step 10f: 管理画面セキュリティ・構成見直し ✅（2026-03-26）
+
+管理者のみが URL を知る運用を前提に、公開側からの管理画面 URL 露出を排除し、
+認証・API 認可・ルーティング方針を整理した。
+
+### 実施内容
+
+- [x] `src/app/admin/config.ts` 新規作成
+  - `ADMIN_BASE_PATH = "/admin"` を一元管理（後から 1 箇所で変更可能）
+  - segment 解析は 1 階層ベースパス前提の旨を TODO コメントで明記
+- [x] `src/app/admin/auth.ts` 更新
+  - `requireAuth` に `mode: "page" | "api" = "page"` パラメータを追加
+    - `"page"` → 未認証時 302 リダイレクト（HTML ページ向け、現行維持）
+    - `"api"` → 未認証時 401 JSON `{"error":"Unauthorized"}`（fetch API 向け）
+  - Cookie の `Path` 属性を `ADMIN_BASE_PATH` 定数参照に変更
+  - ログインリダイレクト先も定数参照に変更
+- [x] `src/app/admin/index.ts` 更新
+  - `PATCH` / `DELETE` メソッドの `requireAuth` 呼び出しを `mode: "api"` に変更
+  - ログイン成功後のリダイレクト先: `/admin` → `/admin/reports`
+  - `GET /admin` / `GET /admin/` の応答: ダッシュボード HTML → `/admin/reports` への 302 リダイレクト
+  - `renderAdminTop` import を削除（関数廃止に対応）
+  - logout リダイレクト先を定数参照に変更
+- [x] `src/app/admin/views.ts` 更新
+  - `renderAdminTop()` 関数を削除（`/admin` ダッシュボード廃止）
+  - 全 `/admin/*` の URL を `ADMIN_BASE_PATH` 定数参照に変更
+    - form action, href, fetch(), location.href すべて対応
+- [x] `src/app/index.ts` 更新
+  - `GET /` → `/admin/login` への 302 リダイレクトに変更（開発確認ページを廃止）
+  - `renderTopPage()` 関数を削除
+  - `ADMIN_BASE_PATH` を import し `pathname.startsWith()` で参照
+- [x] `README.md` 更新
+  - URL 表の公開向けから管理画面 URL を削除
+  - 「管理画面（開発者向け）」小節を新設し、管理画面 URL と注意事項をそこに移動
+- [x] `tests/app/admin.test.ts` 更新
+  - ログイン後リダイレクト先: `/admin` → `/admin/reports` に更新
+  - `GET /admin` のテスト: 200 HTML → 302 `/admin/reports` リダイレクトに変更
+  - `DELETE /admin/reports/:id` 未認証テスト: 302 → 401 JSON に変更
+  - `PATCH /admin/reports/:id/status` 未認証テストを新規追加（401 JSON）
+- [x] `tests/app/routing.test.ts` 更新
+  - `GET /` のテスト: 200 HTML → 302 `/admin/login` リダイレクトに変更
+- [x] テスト結果: **202 件通過**（`conversation.test.ts` の 1 件は今回と無関係の既存バグ）
+
+### 採用判断メモ
+
+- 認証制御が主役: URL 秘匿は補助手段にすぎない。`requireAuth` による確実なブロックを優先
+- ベースパス変更は 1 ファイル（`config.ts`）の `ADMIN_BASE_PATH` のみで対応可能
+  - ただし 2 階層以上（`/admin/v2` 等）への変更は `admin/index.ts` の segment 解析も要更新
+- PATCH/DELETE が 302 リダイレクトを返していた問題を修正
+  - fetch() からのリクエストはリダイレクトに自動追従するが、意図しない動作を招く可能性があった
+- `/admin` ダッシュボードを廃止し、ログイン後に `/admin/reports` へ直行させることで操作起点を明確化
+- トップページ（`/`）をログイン画面リダイレクトにしたため、一般ユーザーが誤アクセスしてもログインフォームのみ表示される
+
+---
+
+## Step 11: 管理画面 UI 改善（複数ステータスフィルタ・モバイル対応）✅（2026-03-26）
+
+パスワード変更機能は管理画面に設けず env var 管理を継続することを確認・整理。
+その上でステータスフィルタの複数選択対応とモバイル対応を実装した。
+
+### パスワード変更ページ — 実装しない（整合性確認）
+
+- `ADMIN_PASSWORD_HASH` は引き続き env var（Wrangler secrets）で管理
+- 管理画面からのパスワード変更ページ・D1 永続化は実装しない方針を確定
+- 前セッションで検討のみ行い未実装だったため、コードへの影響なし
+
+### ステータス複数選択フィルタ
+
+- [x] `src/lib/db.ts`: `GetReportsOptions.status?: ReportStatus` → `statuses?: ReportStatus[]`
+  - `getReports`: 空配列・未指定は全件。非空のとき `WHERE status IN (?, ...)` で絞り込み
+  - `getAllReports`: 同様に引数を `statuses?: ReportStatus[]` に変更
+- [x] `src/app/admin/index.ts`: `searchParams.get("status")` → `getAll("status").filter(isValidStatus)`
+  - `handleReportList` / `handleCsvExport` 両方を配列ベースに変更
+- [x] `src/app/admin/views.ts`: フィルタ UI を `<select>` → チェックボックス群に変更
+  - ページネーションリンクに複数 `status=X&status=Y` パラメータを引き継ぐ
+  - CSV 出力リンクも同様に複数パラメータ対応
+
+### モバイル対応
+
+- [x] `src/app/admin/views.ts` COMMON_CSS に以下を追加
+  - `.table-wrap { overflow-x: auto }` でテーブルを横スクロール化（HTML も `<div class="table-wrap">` でラップ）
+  - `.filter-checkboxes` スタイル追加（チェックボックスの横並び・折り返し）
+  - `@media (max-width: 640px)` ブレークポイントで以下を切り替え:
+    - `body` padding を 0.75rem に縮小
+    - `dl` を 2カラム → 1カラム（詳細ページの定義リスト）
+    - `.photo-grid` を 2カラム → 1カラム
+    - `.site-header` に `flex-wrap: wrap`
+    - ボタン・リンクの最小高さを 44px（タップターゲット基準）
+    - フィルタフォームを縦並びに変更
+
+### テスト更新
+
+- [x] `tests/lib/db.test.ts`: `statuses: ["pending"]`（単一）・`statuses: ["pending", "in_progress"]`（複数）に更新
+- [x] `tests/app/admin.test.ts`: 複数ステータスフィルタテストを追加・既存テストを配列ベースに更新
+- [x] テスト結果: **204 件通過**（`conversation.test.ts` の 1 件は既存バグのまま）
+
+### 採用判断メモ
+
+- チェックボックスを採用: `<select multiple>` より直感的にタップ・クリックしやすく、モバイルでも操作しやすい
+- テーブルは横スクロール化を選択: カード形式等への変換は実装コストが高く、既存の列構成を維持したまま対応できる横スクロールを優先
+- `@media (max-width: 640px)` ブレークポイント: 一般的なスマートフォン（375px〜430px）をカバー

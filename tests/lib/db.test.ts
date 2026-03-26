@@ -240,15 +240,24 @@ describe("getReports", () => {
     expect(result.reports[0]!.status).toBe("pending");
   });
 
-  it("status フィルタあり: WHERE 句付きで照会される", async () => {
+  it("statuses フィルタあり（単一）: WHERE IN 句付きで照会される", async () => {
     const db = makeGetReportsDb(1, [sampleRow]);
     const prepareMock = db.prepare as ReturnType<typeof vi.fn>;
 
-    await getReports(db, { status: "pending", limit: 20, offset: 0 });
+    await getReports(db, { statuses: ["pending"], limit: 20, offset: 0 });
 
-    // COUNT クエリと DATA クエリの両方に status バインドが渡されることを確認
     const sqlCalls = prepareMock.mock.calls.map((c: unknown[]) => c[0] as string);
-    expect(sqlCalls.some((sql) => sql.includes("WHERE status"))).toBe(true);
+    expect(sqlCalls.some((sql) => sql.includes("WHERE status IN"))).toBe(true);
+  });
+
+  it("statuses フィルタあり（複数）: WHERE IN 句付きで照会される", async () => {
+    const db = makeGetReportsDb(2, [sampleRow]);
+    const prepareMock = db.prepare as ReturnType<typeof vi.fn>;
+
+    await getReports(db, { statuses: ["pending", "in_progress"], limit: 20, offset: 0 });
+
+    const sqlCalls = prepareMock.mock.calls.map((c: unknown[]) => c[0] as string);
+    expect(sqlCalls.some((sql) => sql.includes("WHERE status IN"))).toBe(true);
   });
 
   it("0 件の場合は total=0 + 空配列を返す", async () => {

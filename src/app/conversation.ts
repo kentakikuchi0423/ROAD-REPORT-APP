@@ -934,7 +934,6 @@ async function handleCancellingStep(
 
   if (text === CANCEL_CONFIRM_NO) {
     const prevStep = session.data.previousStep;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { previousStep: _removed, ...dataWithoutPrev } = session.data;
     const targetStep: ConversationStep = prevStep ?? "consent";
 

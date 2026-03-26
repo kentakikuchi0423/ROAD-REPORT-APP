@@ -144,12 +144,12 @@ describe("handleAdmin", () => {
       });
     }
 
-    it("正しい認証情報で 302 + Set-Cookie を返す", async () => {
+    it("正しい認証情報で 302 + Set-Cookie を返し /admin/reports へリダイレクトする", async () => {
       const req = makeLoginRequest(TEST_USERNAME, TEST_PASSWORD);
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
       expect(res.status).toBe(302);
-      expect(res.headers.get("Location")).toBe("/admin");
+      expect(res.headers.get("Location")).toBe("/admin/reports");
       expect(res.headers.get("Set-Cookie")).toContain(SESSION_COOKIE_NAME);
     });
 
@@ -188,7 +188,7 @@ describe("handleAdmin", () => {
   // ---- 未認証アクセス --------------------------------------------------------
 
   describe("未認証アクセス", () => {
-    it("GET /admin（Cookie なし）は /admin/login へリダイレクト", async () => {
+    it("GET /admin（Cookie なし）は /admin/login へリダイレクト（page モード）", async () => {
       const req = makeRequest("GET", "/admin");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
@@ -208,27 +208,20 @@ describe("handleAdmin", () => {
   // ---- GET /admin -----------------------------------------------------------
 
   describe("GET /admin", () => {
-    it("200 + text/html を返す", async () => {
+    it("/admin/reports へ 302 リダイレクトする", async () => {
       const req = await makeAuthRequest("GET", "/admin");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
-      expect(res.status).toBe(200);
-      expect(res.headers.get("content-type")).toMatch(/text\/html/);
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain("/admin/reports");
     });
 
-    it("レスポンス HTML に管理画面タイトルが含まれる", async () => {
-      const req = await makeAuthRequest("GET", "/admin");
-      const res = await handleAdmin(req, mockEnv, mockCtx);
-      const html = await res.text();
-
-      expect(html).toContain("管理画面");
-    });
-
-    it("GET /admin/ （末尾スラッシュ）でも 200 を返す", async () => {
+    it("GET /admin/ （末尾スラッシュ）でも /admin/reports へリダイレクトする", async () => {
       const req = await makeAuthRequest("GET", "/admin/");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain("/admin/reports");
     });
   });
 
@@ -260,7 +253,7 @@ describe("handleAdmin", () => {
       expect(html).toContain("OZU-20260325-001");
     });
 
-    it("?status=pending で getReports に status が渡される", async () => {
+    it("?status=pending で getReports に statuses=[pending] が渡される", async () => {
       mockGetReports.mockResolvedValue(emptyPage);
 
       const req = await makeAuthRequest("GET", "/admin/reports?status=pending");
@@ -268,30 +261,30 @@ describe("handleAdmin", () => {
 
       expect(mockGetReports).toHaveBeenCalledWith(
         mockEnv.DB,
-        expect.objectContaining({ status: "pending" }),
+        expect.objectContaining({ statuses: ["pending"] }),
       );
     });
 
-    it("?status=in_progress でも status が渡される", async () => {
+    it("?status=pending&status=in_progress で statuses に複数値が渡される", async () => {
       mockGetReports.mockResolvedValue(emptyPage);
 
-      const req = await makeAuthRequest("GET", "/admin/reports?status=in_progress");
+      const req = await makeAuthRequest("GET", "/admin/reports?status=pending&status=in_progress");
       await handleAdmin(req, mockEnv, mockCtx);
 
       expect(mockGetReports).toHaveBeenCalledWith(
         mockEnv.DB,
-        expect.objectContaining({ status: "in_progress" }),
+        expect.objectContaining({ statuses: ["pending", "in_progress"] }),
       );
     });
 
-    it("?status=unknown（不正値）は status=undefined で呼ばれる", async () => {
+    it("?status=unknown（不正値）は statuses=[] で呼ばれる", async () => {
       mockGetReports.mockResolvedValue(emptyPage);
 
       const req = await makeAuthRequest("GET", "/admin/reports?status=unknown");
       await handleAdmin(req, mockEnv, mockCtx);
 
       const call = mockGetReports.mock.calls[0]!;
-      expect(call[1]!.status).toBeUndefined();
+      expect(call[1]!.statuses).toEqual([]);
     });
 
     it("?page=2 で offset=20 が渡される", async () => {
@@ -467,6 +460,16 @@ describe("handleAdmin", () => {
 
       expect(res.status).toBe(400);
     });
+
+    it("未認証は 401 JSON を返す（fetch API 向け）", async () => {
+      const req = makeRequest("PATCH", "/admin/reports/1/status", { status: "resolved" });
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(401);
+      expect(res.headers.get("content-type")).toMatch(/application\/json/);
+      const json = await res.json<{ error: string }>();
+      expect(json.error).toBeTruthy();
+    });
   });
 
   // ---- GET /admin/reports/csv -----------------------------------------------
@@ -495,23 +498,32 @@ describe("handleAdmin", () => {
       expect(text).toContain("受付済み");
     });
 
-    it("?status=pending で getAllReports に status が渡される", async () => {
+    it("?status=pending で getAllReports に statuses=[pending] が渡される", async () => {
       mockGetAllReports.mockResolvedValue([]);
 
       const req = await makeAuthRequest("GET", "/admin/reports/csv?status=pending");
       await handleAdmin(req, mockEnv, mockCtx);
 
-      expect(mockGetAllReports).toHaveBeenCalledWith(mockEnv.DB, "pending");
+      expect(mockGetAllReports).toHaveBeenCalledWith(mockEnv.DB, ["pending"]);
     });
 
-    it("?status=unknown（不正値）は status=undefined で呼ばれる", async () => {
+    it("?status=pending&status=resolved で getAllReports に複数値が渡される", async () => {
+      mockGetAllReports.mockResolvedValue([]);
+
+      const req = await makeAuthRequest("GET", "/admin/reports/csv?status=pending&status=resolved");
+      await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(mockGetAllReports).toHaveBeenCalledWith(mockEnv.DB, ["pending", "resolved"]);
+    });
+
+    it("?status=unknown（不正値）は statuses=[] で呼ばれる", async () => {
       mockGetAllReports.mockResolvedValue([]);
 
       const req = await makeAuthRequest("GET", "/admin/reports/csv?status=unknown");
       await handleAdmin(req, mockEnv, mockCtx);
 
-      const [, status] = mockGetAllReports.mock.calls[0]!;
-      expect(status).toBeUndefined();
+      const [, statuses] = mockGetAllReports.mock.calls[0]!;
+      expect(statuses).toEqual([]);
     });
 
     it("未認証は /admin/login へリダイレクト", async () => {
@@ -660,12 +672,14 @@ describe("handleAdmin", () => {
       expect(mockDeleteReport).not.toHaveBeenCalled();
     });
 
-    it("未認証は /admin/login へリダイレクト", async () => {
+    it("未認証は 401 JSON を返す（fetch API 向け）", async () => {
       const req = makeRequest("DELETE", "/admin/reports/1");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
-      expect(res.status).toBe(302);
-      expect(res.headers.get("Location")).toContain("/admin/login");
+      expect(res.status).toBe(401);
+      expect(res.headers.get("content-type")).toMatch(/application\/json/);
+      const json = await res.json<{ error: string }>();
+      expect(json.error).toBeTruthy();
     });
   });
 
