@@ -28,3 +28,5 @@ pnpm-debug.log*
 
 # pnpm
 .pnpm-store/
+.dev.vars
+.claude/settings.local.json
