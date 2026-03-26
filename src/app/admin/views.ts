@@ -9,25 +9,11 @@ import type { Report, ReportStatus } from "../../types";
 import type { ReportsPage } from "../../lib/db";
 import { BRANDING } from "../../lib/branding";
 import { ADMIN_BASE_PATH } from "./config";
+import { STATUS_LABELS, STATUS_BADGE_CLASSES, VALID_STATUSES } from "../../lib/constants";
 
 // ---- 定数 -------------------------------------------------------------------
 
 const PAGE_SIZE = 20;
-
-const STATUS_LABELS: Record<ReportStatus, string> = {
-  pending: "受付済み",
-  in_progress: "対応中",
-  resolved: "対応完了",
-  rejected: "対応不要",
-};
-
-/** ステータスバッジに付与する CSS クラス名（badge badge--STATUS） */
-const STATUS_BADGE_CLASSES: Record<ReportStatus, string> = {
-  pending: "badge badge--pending",
-  in_progress: "badge badge--in_progress",
-  resolved: "badge badge--resolved",
-  rejected: "badge badge--rejected",
-};
 
 /** 対応完了・不要の終了系ステータス（一覧行を淡色表示するために使用） */
 const CLOSED_STATUSES = new Set<ReportStatus>(["resolved", "rejected"]);
@@ -142,10 +128,22 @@ const COMMON_CSS = `
   tr.row--closed td { color: #999; }
   tr.row--closed td a { color: #999; }
   .muted { color: #999; font-style: italic; }
-  .filter-form { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
-  .filter-form select, .filter-form button { padding: 0.35rem 0.65rem; font-size: 0.88rem; border: 1px solid #ced4da; border-radius: 4px; }
-  .filter-form button { background: var(--color-brand); color: #fff; cursor: pointer; border-color: var(--color-brand); }
-  .filter-form button:hover { background: var(--color-brand-dark); }
+  /* 一覧ツールバー（件数 + CSV） */
+  .list-toolbar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.85rem; margin-bottom: 0.85rem; border-bottom: 1px solid #e9ecef; }
+  .list-count { font-size: 0.85rem; color: #888; }
+  .csv-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.75rem; font-size: 0.82rem; color: #444; background: #fff; border: 1px solid #dde1e7; border-radius: 6px; text-decoration: none; line-height: 1.5; transition: background 0.12s, border-color 0.12s; }
+  .csv-btn:hover { background: #f4f6f9; border-color: #b0bbc8; color: #222; }
+  /* フィルタバー */
+  .filter-bar { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .filter-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; flex: 1; min-width: 0; }
+  .filter-chip { display: inline-flex; align-items: center; padding: 0.25rem 0.8rem; border: 1.5px solid #dde1e7; border-radius: 20px; font-size: 0.82rem; cursor: pointer; background: #f8f9fa; color: #555; user-select: none; transition: background 0.12s, border-color 0.12s, color 0.12s; }
+  .filter-chip input[type="checkbox"] { display: none; }
+  .filter-chip:has(input:checked) { background: var(--color-brand); border-color: var(--color-brand); color: #fff; font-weight: 600; }
+  .filter-actions { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; }
+  .apply-btn { display: inline-flex; align-items: center; padding: 0.28rem 0.85rem; font-size: 0.82rem; background: #f1f3f7; color: #333; border: 1px solid #dde1e7; border-radius: 6px; cursor: pointer; font-family: inherit; white-space: nowrap; line-height: 1.5; transition: background 0.12s, border-color 0.12s; }
+  .apply-btn:hover { background: #e3e8f0; border-color: #b0bbc8; }
+  .reset-lnk { font-size: 0.81rem; color: #bbb; text-decoration: none; padding: 0.28rem 0.2rem; cursor: pointer; white-space: nowrap; transition: color 0.12s; line-height: 1.5; }
+  .reset-lnk:hover { color: #666; text-decoration: underline; }
   .pagination { display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem; font-size: 0.9rem; }
   .pagination a, .pagination span { padding: 4px 12px; border: 1px solid #ced4da; border-radius: 4px; text-decoration: none; color: var(--color-brand); }
   .pagination span { color: #999; cursor: default; }
@@ -177,6 +175,13 @@ const COMMON_CSS = `
   .photo-download-link:hover { background: var(--color-brand-dark); color: #fff; }
   .danger-section { border-color: #dc3545; }
   .danger-section h2 { color: #dc3545; border-left-color: #dc3545; }
+  /* 写真 lightbox */
+  .photo-error { font-size: 0.82rem; color: #dc3545; padding: 0.5rem 0; }
+  .lightbox-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center; cursor: zoom-out; }
+  .lightbox-overlay.is-open { display: flex; }
+  .lightbox-overlay img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px; box-shadow: 0 4px 24px rgba(0,0,0,0.5); cursor: default; }
+  .lightbox-close { position: absolute; top: 1rem; right: 1.25rem; color: #fff; font-size: 2rem; line-height: 1; cursor: pointer; background: none; border: none; padding: 0; opacity: 0.8; }
+  .lightbox-close:hover { opacity: 1; }
   .danger-btn { padding: 0.45rem 1.2rem; font-size: 0.9rem; background: #fff; color: #dc3545; border: 1px solid #dc3545; border-radius: 4px; cursor: pointer; }
   .danger-btn:hover { background: #dc3545; color: #fff; }
   /* 詳細: ステータス更新 */
@@ -188,10 +193,6 @@ const COMMON_CSS = `
   .back-link { margin-bottom: 1rem; display: inline-block; font-size: 0.9rem; }
   /* テーブル横スクロール */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  /* フィルタフォーム: チェックボックスグループ */
-  .filter-checkboxes { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: center; }
-  .filter-checkboxes label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.88rem; cursor: pointer; white-space: nowrap; }
-  .filter-checkboxes input[type="checkbox"] { width: 1rem; height: 1rem; cursor: pointer; }
   @media (max-width: 640px) {
     body { padding: 0 0.75rem 2rem; }
     .site-header { flex-wrap: wrap; gap: 0.5rem; }
@@ -199,12 +200,15 @@ const COMMON_CSS = `
     dt { margin-top: 0.4rem; }
     .photo-grid { grid-template-columns: 1fr; }
     .logout-btn { min-height: 44px; }
-    .filter-form button { min-height: 44px; }
     .status-form button { min-height: 44px; }
     .danger-btn { min-height: 44px; width: 100%; }
     .photo-download-link { min-height: 44px; display: flex; align-items: center; justify-content: center; }
-    .filter-form { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
-    .filter-checkboxes { gap: 0.4rem 1rem; }
+    .list-toolbar { flex-wrap: wrap; gap: 0.4rem; }
+    .csv-btn { flex: 1 1 auto; justify-content: center; min-height: 44px; }
+    .filter-bar { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+    .filter-actions { flex-wrap: wrap; gap: 0.4rem; }
+    .apply-btn { flex: 1 1 auto; justify-content: center; min-height: 44px; }
+    .reset-lnk { min-height: 44px; display: flex; align-items: center; }
   }
 `;
 
@@ -283,33 +287,33 @@ export function renderReportList(
   // ステータスクエリ文字列（複数対応）
   const statusQs = statuses.map((s) => `status=${encodeURIComponent(s)}`).join("&");
 
-  // フィルタフォーム（チェックボックス）
-  const allStatuses: ReportStatus[] = ["pending", "in_progress", "resolved", "rejected"];
-  const allStatusLabels: Record<ReportStatus, string> = {
-    pending: "受付済み",
-    in_progress: "対応中",
-    resolved: "対応完了",
-    rejected: "対応不要",
-  };
-  const checkboxes = allStatuses
+  // フィルタフォーム（チップ型チェックボックス）
+  const checkboxes = VALID_STATUSES
     .map((s) => {
       const checked = statuses.includes(s) ? " checked" : "";
-      return `<label><input type="checkbox" name="status" value="${s}"${checked}> ${allStatusLabels[s]}</label>`;
+      return `<label class="filter-chip"><input type="checkbox" name="status" value="${s}"${checked}>${STATUS_LABELS[s]}</label>`;
     })
     .join("\n        ");
   const csvHref = statusQs
     ? `${ADMIN_BASE_PATH}/reports/csv?${statusQs}`
     : `${ADMIN_BASE_PATH}/reports/csv`;
+  const resetLink = statuses.length > 0
+    ? `<a class="reset-lnk" href="${ADMIN_BASE_PATH}/reports">リセット</a>`
+    : "";
+  const toolbar = `
+  <div class="list-toolbar">
+    <span class="list-count">${page.total} 件</span>
+    <a class="csv-btn" href="${csvHref}"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV 出力</a>
+  </div>`;
   const filterForm = `
-  <form class="filter-form" method="GET" action="${ADMIN_BASE_PATH}/reports">
-    <span class="filter-label" style="font-size:0.88rem">ステータス:</span>
-    <div class="filter-checkboxes">
+  <form class="filter-bar" method="GET" action="${ADMIN_BASE_PATH}/reports">
+    <div class="filter-chips">
       ${checkboxes}
     </div>
-    <button type="submit">絞り込み</button>
-    ${statuses.length > 0 ? `<a href="${ADMIN_BASE_PATH}/reports">リセット</a>` : ""}
-    <a href="${csvHref}" style="padding:0.35rem 0.65rem;font-size:0.88rem;border:1px solid #198754;border-radius:4px;color:#198754;text-decoration:none;white-space:nowrap">CSV出力</a>
-    <span style="margin-left:auto;color:#666;font-size:0.88rem">${page.total} 件</span>
+    <div class="filter-actions">
+      ${resetLink}
+      <button class="apply-btn" type="submit">絞り込み</button>
+    </div>
   </form>`;
 
   // テーブル行（6列: 受付番号・受付日時・ステータス・住所・通報者名・ステータス変更）
@@ -334,10 +338,7 @@ export function renderReportList(
           <td>
             <form class="inline-status-form" data-id="${r.id}">
               <select>
-                <option value="pending"${r.status === "pending" ? " selected" : ""}>受付済み</option>
-                <option value="in_progress"${r.status === "in_progress" ? " selected" : ""}>対応中</option>
-                <option value="resolved"${r.status === "resolved" ? " selected" : ""}>対応完了</option>
-                <option value="rejected"${r.status === "rejected" ? " selected" : ""}>対応不要</option>
+                ${VALID_STATUSES.map((s) => `<option value="${s}"${r.status === s ? " selected" : ""}>${STATUS_LABELS[s]}</option>`).join("\n                ")}
               </select>
               <button type="submit">更新</button>
             </form>
@@ -413,6 +414,7 @@ export function renderReportList(
   const body = `
   <h1>通報一覧</h1>
   <div class="card">
+    ${toolbar}
     ${filterForm}
     <div class="table-wrap">
       <table>
@@ -506,10 +508,7 @@ export function renderReportDetail(report: Report): string {
     <h2>ステータス更新</h2>
     <form id="status-form" class="status-form">
       <select id="status-select">
-        <option value="pending"${report.status === "pending" ? " selected" : ""}>受付済み</option>
-        <option value="in_progress"${report.status === "in_progress" ? " selected" : ""}>対応中</option>
-        <option value="resolved"${report.status === "resolved" ? " selected" : ""}>対応完了</option>
-        <option value="rejected"${report.status === "rejected" ? " selected" : ""}>対応不要</option>
+        ${VALID_STATUSES.map((s) => `<option value="${s}"${report.status === s ? " selected" : ""}>${STATUS_LABELS[s]}</option>`).join("\n        ")}
       </select>
       <button id="status-btn" type="submit">更新</button>
       <span id="status-msg" class="status-msg" style="display:none">✓ 更新しました</span>
@@ -531,7 +530,6 @@ export function renderReportDetail(report: Report): string {
       <dt>補足事項</dt><dd style="white-space:pre-wrap">${val(report.remarks)}</dd>
       <dt>通報者名</dt><dd>${val(report.reporterName)}</dd>
       <dt>電話番号</dt><dd>${val(report.reporterPhone)}</dd>
-      <dt>LINE ユーザー ID</dt><dd>${escapeHtml(report.lineUserId)}</dd>
     </dl>
   </div>
 
@@ -540,19 +538,24 @@ export function renderReportDetail(report: Report): string {
     <div class="photo-grid">
       <div class="photo-card">
         <p class="photo-label">近景写真</p>
-        <a href="${ADMIN_BASE_PATH}/reports/${report.id}/images/close" target="_blank" rel="noopener" class="photo-preview-link">
-          <img src="${ADMIN_BASE_PATH}/reports/${report.id}/images/close" alt="近景写真" class="photo-thumb" loading="lazy">
-        </a>
+        <img src="${ADMIN_BASE_PATH}/reports/${report.id}/images/close" alt="近景写真" class="photo-thumb js-lightbox-trigger" loading="lazy"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <p class="photo-error" style="display:none">画像を取得できませんでした</p>
         <a class="photo-download-link" href="${ADMIN_BASE_PATH}/reports/${report.id}/images/close?dl=1" download="${escapeHtml(`close_${report.receiptNumber}.jpg`)}">ダウンロード</a>
       </div>
       <div class="photo-card">
         <p class="photo-label">遠景写真</p>
-        <a href="${ADMIN_BASE_PATH}/reports/${report.id}/images/far" target="_blank" rel="noopener" class="photo-preview-link">
-          <img src="${ADMIN_BASE_PATH}/reports/${report.id}/images/far" alt="遠景写真" class="photo-thumb" loading="lazy">
-        </a>
+        <img src="${ADMIN_BASE_PATH}/reports/${report.id}/images/far" alt="遠景写真" class="photo-thumb js-lightbox-trigger" loading="lazy"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <p class="photo-error" style="display:none">画像を取得できませんでした</p>
         <a class="photo-download-link" href="${ADMIN_BASE_PATH}/reports/${report.id}/images/far?dl=1" download="${escapeHtml(`far_${report.receiptNumber}.jpg`)}">ダウンロード</a>
       </div>
     </div>
+  </div>
+
+  <div id="lightbox" class="lightbox-overlay" role="dialog" aria-modal="true" aria-label="写真拡大表示">
+    <button class="lightbox-close" id="lightbox-close" aria-label="閉じる">✕</button>
+    <img id="lightbox-img" src="" alt="">
   </div>
 
   <div class="section danger-section">
@@ -582,6 +585,38 @@ export function renderReportDetail(report: Report): string {
         btn.disabled = false;
         btn.textContent = 'この通報を削除する';
       });
+  });
+})();
+</script>
+<script>
+(function() {
+  var overlay = document.getElementById('lightbox');
+  var lightboxImg = document.getElementById('lightbox-img');
+  var closeBtn = document.getElementById('lightbox-close');
+  if (!overlay || !lightboxImg || !closeBtn) return;
+  function openLightbox(src, alt) {
+    lightboxImg.src = src;
+    lightboxImg.alt = alt || '';
+    overlay.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeLightbox() {
+    overlay.classList.remove('is-open');
+    document.body.style.overflow = '';
+    lightboxImg.src = '';
+  }
+  document.querySelectorAll('.js-lightbox-trigger').forEach(function(img) {
+    img.style.cursor = 'zoom-in';
+    img.addEventListener('click', function() {
+      openLightbox(img.src, img.alt);
+    });
+  });
+  closeBtn.addEventListener('click', closeLightbox);
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeLightbox();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeLightbox();
   });
 })();
 </script>

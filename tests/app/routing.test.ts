@@ -119,12 +119,10 @@ describe("fetch handler routing", () => {
     expect(res.status).toBe(401);
   });
 
-  it("GET /privacy は 200 + text/html を返す", async () => {
+  it("GET /privacy は 404 を返す", async () => {
     const req = new Request("http://localhost/privacy", { method: "GET" });
     const res = await worker.fetch(req, mockEnv, mockCtx);
-
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toMatch(/text\/html/);
+    expect(res.status).toBe(404);
   });
 
   it("不明なパスは 404 を返す", async () => {

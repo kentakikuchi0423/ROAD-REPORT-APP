@@ -332,8 +332,8 @@ describe("consent ステップ", () => {
     expect((messages[0] as { text: string }).text).toContain("近景写真");
   });
 
-  it("「キャンセル」→ deleteSession + キャンセルメッセージ", async () => {
-    await handleConversationMessage(makeTextEvent("キャンセル"), USER_ID, mockEnv);
+  it("「通報を中止する」→ deleteSession + キャンセルメッセージ", async () => {
+    await handleConversationMessage(makeTextEvent("通報を中止する"), USER_ID, mockEnv);
 
     expect(mockDeleteSession).toHaveBeenCalledWith(mockEnv.DB, USER_ID);
     expect(mockUpsertSession).not.toHaveBeenCalled();
@@ -699,7 +699,7 @@ describe("reporter_phone → confirming 遷移時のサマリーメッセージ"
     const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
     const text = (messages[0] as { text: string }).text;
     expect(text).toContain("撮影日付：未入力");
-    expect(text).toContain("お名前：匿名");
+    expect(text).toContain("お名前：未入力");
   });
 });
 

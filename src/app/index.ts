@@ -5,14 +5,12 @@
  *   GET  /           - 管理画面ログインへリダイレクト
  *   GET  /healthz    - ヘルスチェック
  *   POST /webhook    - LINE Webhook
- *   GET  /privacy    - プライバシーポリシー
  *   /admin/*         - 管理画面
  */
 
 import type { Env } from "../types";
 import { handleWebhook } from "./webhook";
 import { handleAdmin } from "./admin/index";
-import { privacyPolicyHtml } from "./privacy";
 import { ADMIN_BASE_PATH } from "./admin/config";
 
 export default {
@@ -20,7 +18,7 @@ export default {
     const url = new URL(request.url);
     const { pathname } = url;
 
-    // トップページ → ログイン画面へリダイレクト
+    // トップページ → 管理画面ログインへリダイレクト（Web アクセスは管理者のみ）
     if (pathname === "/" && request.method === "GET") {
       return Response.redirect(
         new URL(`${ADMIN_BASE_PATH}/login`, request.url).toString(),
@@ -38,13 +36,6 @@ export default {
     // LINE Webhook
     if (pathname === "/webhook" && request.method === "POST") {
       return handleWebhook(request, env, ctx);
-    }
-
-    // プライバシーポリシー
-    if (pathname === "/privacy") {
-      return new Response(privacyPolicyHtml, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
     }
 
     // 管理画面

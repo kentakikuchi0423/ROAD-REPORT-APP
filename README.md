@@ -121,7 +121,6 @@ npx wrangler dev
 |---|---|
 | http://localhost:8787/ | → 管理画面ログインへリダイレクト |
 | http://localhost:8787/healthz | ヘルスチェック（JSON） |
-| http://localhost:8787/privacy | プライバシーポリシー |
 
 ### 管理画面（開発者向け）
 

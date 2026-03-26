@@ -38,24 +38,11 @@ import {
   buildLogoutCookieHeader,
 } from "./auth";
 import { ADMIN_BASE_PATH } from "./config";
+import { STATUS_LABELS, VALID_STATUSES } from "../../lib/constants";
 
 // ---- 定数 -------------------------------------------------------------------
 
 const PAGE_SIZE = 20;
-
-const VALID_STATUSES: readonly ReportStatus[] = [
-  "pending",
-  "in_progress",
-  "resolved",
-  "rejected",
-];
-
-const STATUS_LABELS_CSV: Record<ReportStatus, string> = {
-  pending: "受付済み",
-  in_progress: "対応中",
-  resolved: "対応完了",
-  rejected: "対応不要",
-};
 
 // ---- ヘルパー ---------------------------------------------------------------
 
@@ -124,7 +111,7 @@ function buildCsv(reports: Report[]): string {
   const rows = reports.map((r) =>
     [
       csvEscape(r.receiptNumber),
-      csvEscape(STATUS_LABELS_CSV[r.status]),
+      csvEscape(STATUS_LABELS[r.status]),
       csvEscape(formatJstForCsv(r.createdAt)),
       csvEscape(formatJstForCsv(r.updatedAt)),
       csvEscape(r.locationAddress),

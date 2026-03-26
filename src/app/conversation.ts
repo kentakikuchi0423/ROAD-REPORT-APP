@@ -62,12 +62,12 @@ const MSG_REQUEST_CONSENT = [
   "通報内容への個別のご回答は原則行っておりませんが、状況によりご連絡をすることがあります。",
   "",
   "内容にご同意いただける場合は「同意する」をタップしてください。",
-  "中止する場合は「キャンセル」をタップしてください。",
+  "中止する場合は「通報を中止する」をタップしてください。",
 ].join("\n");
 
 /** 同意テキスト以外が届いた場合の再案内 */
 const MSG_RETRY_CONSENT =
-  "通報を始めるには「同意する」をタップしてください。\n中止する場合は「キャンセル」をタップしてください。";
+  "通報を始めるには「同意する」をタップしてください。\n中止する場合は「通報を中止する」をタップしてください。";
 
 /** キャンセル時のメッセージ */
 const MSG_CANCELLED =
@@ -210,11 +210,11 @@ const QUICK_REPLY_CANCEL_CONFIRM = {
   ],
 };
 
-/** 利用同意 Quick Reply（「同意する」「キャンセル」） */
+/** 利用同意 Quick Reply（「同意する」「通報を中止する」） */
 const QUICK_REPLY_CONSENT = {
   items: [
     { type: "action", action: { type: "message", label: "同意する", text: "同意する" } },
-    { type: "action", action: { type: "message", label: "キャンセル", text: "キャンセル" } },
+    { type: "action", action: { type: "message", label: "通報を中止する", text: CANCEL_TEXT } },
   ],
 };
 
@@ -501,7 +501,7 @@ async function handleConsentStep(
 
   const text = event.message.text.trim();
 
-  if (text === "キャンセル" || text === CANCEL_TEXT) {
+  if (text === CANCEL_TEXT) {
     await deleteSession(env.DB, session.lineUserId);
     await replyMessage(
       replyToken,

@@ -854,3 +854,43 @@ LINE キャンセル確認フロー・管理画面 UI 統一・写真プレビ�
 - `.dev.vars` は開発用として実際の値が設定されているが、git 未追跡のため漏洩リスクなし
 - ただし上記 5 シークレットは本番環境に同じ値を使用してはならない（`wrangler secret put` で別途登録）
 - `CLOUDFLARE_API_TOKEN` は Workers 本番環境では不要（wrangler CLI 認証用のローカル専用）
+
+---
+
+## Step 12: 本番前最終整備 ✅
+
+保守性・セキュリティ・コード統一性の向上を目的とした最終整備。
+
+### 実施内容
+
+- [x] `src/lib/constants.ts` 新規作成：`STATUS_LABELS` / `STATUS_BADGE_CLASSES` / `VALID_STATUSES` を一元管理
+- [x] `src/app/admin/index.ts`：`STATUS_LABELS_CSV` / `VALID_STATUSES` を constants から参照に変更
+- [x] `src/app/admin/views.ts`：ローカル定義の重複ラベル（`STATUS_LABELS`・`allStatusLabels`・`STATUS_BADGE_CLASSES`）を削除し constants から参照。ステータス select の選択肢を動的生成に変更
+- [x] 認証ルート網羅確認：全 `/admin/*` ルートで `requireAuth` が適用されていることを確認（追加修正なし）
+- [x] `src/app/index.ts`：トップページを `/admin/login` リダイレクトから LINE サービス案内 HTML（200）に変更し管理画面URL露出を排除
+- [x] `src/app/conversation.ts`：consent ステップの「キャンセル」QR を「通報を中止する」に統一（他ステップと表記を揃える）
+- [x] `src/app/admin/views.ts`：詳細ページ写真セクションに lightbox（CSS モーダル）と `onerror` エラーフォールバックを追加
+- [x] `src/lib/branding.ts`：BRANDING 参照が適切であることを確認（追加修正なし）
+- [x] `src/app/privacy.ts`：削除（`/privacy` ルートを廃止）。`src/app/index.ts` のインポート・ルートハンドラ・トップページリンクも合わせて削除。`tests/app/routing.test.ts` / `README.md` も追従更新
+- [x] テスト更新（205件全通過）：consent「キャンセル」→「通報を中止する」、`お名前：匿名`→`お名前：未入力`、`GET /` 期待値変更、`/privacy` → 404 に更新
+
+### 変更ファイル
+
+| ファイル | 種別 |
+|---|---|
+| `src/lib/constants.ts` | 新規作成 |
+| `src/app/admin/index.ts` | 更新 |
+| `src/app/admin/views.ts` | 更新 |
+| `src/app/index.ts` | 更新 |
+| `src/app/conversation.ts` | 更新 |
+| `tests/app/conversation.test.ts` | 更新 |
+| `tests/app/routing.test.ts` | 更新 |
+
+### テスト結果
+
+- 205 tests passed（0 failed）
+- `npx tsc --noEmit` の既存型エラー（tests/ 内の `as` キャストと `undefined` 参照）は変更前から存在し今回の変更では未修正
+
+### 次のステップ
+
+本番環境デプロイ（Step 11 本体：`wrangler deploy` / D1 migration / R2 bucket 作成 / シークレット登録）
