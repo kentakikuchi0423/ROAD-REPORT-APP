@@ -127,6 +127,12 @@ const COMMON_CSS = `
 `;
 
 function renderLayout(title: string, body: string): string {
+  const logoutNav = `
+  <nav style="display:flex;justify-content:flex-end;margin-bottom:0.5rem;font-size:0.85rem">
+    <form method="POST" action="/admin/logout" style="margin:0">
+      <button type="submit" style="background:none;border:none;color:#2a6496;cursor:pointer;padding:0;font-size:0.85rem;text-decoration:underline">ログアウト</button>
+    </form>
+  </nav>`;
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -136,6 +142,7 @@ function renderLayout(title: string, body: string): string {
   <style>${COMMON_CSS}</style>
 </head>
 <body>
+${logoutNav}
 ${body}
 </body>
 </html>`;
@@ -143,13 +150,50 @@ ${body}
 
 // ---- 各ページ ---------------------------------------------------------------
 
+/** ログインページ */
+export function renderLoginPage(error?: string): string {
+  const errorHtml = error
+    ? `<p style="color:#dc3545;margin-bottom:1rem;font-size:0.9rem">${escapeHtml(error)}</p>`
+    : "";
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ログイン - 大洲市道路破損通報 管理画面</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif; background: #f1f3f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .login-box { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 2rem 2.5rem; width: 100%; max-width: 360px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    h1 { font-size: 1.15rem; margin: 0 0 1.5rem; color: #333; border-bottom: 2px solid #2a6496; padding-bottom: 0.5rem; }
+    label { display: block; font-size: 0.88rem; font-weight: bold; color: #555; margin-bottom: 0.25rem; }
+    input[type="text"], input[type="password"] { width: 100%; padding: 0.5rem 0.65rem; font-size: 0.95rem; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; margin-bottom: 1rem; }
+    input:focus { outline: none; border-color: #2a6496; box-shadow: 0 0 0 2px rgba(42,100,150,0.15); }
+    button[type="submit"] { width: 100%; padding: 0.55rem; font-size: 1rem; background: #2a6496; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button[type="submit"]:hover { background: #1a4066; }
+    .footer { margin-top: 1.5rem; font-size: 0.8rem; color: #aaa; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <h1>管理画面 ログイン</h1>
+    ${errorHtml}
+    <form method="POST" action="/admin/login">
+      <label for="username">ユーザー名</label>
+      <input type="text" id="username" name="username" autocomplete="username" required>
+      <label for="password">パスワード</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+      <button type="submit">ログイン</button>
+    </form>
+    <p class="footer">大洲市道路破損通報サービス</p>
+  </div>
+</body>
+</html>`;
+}
+
 /** 管理トップページ */
 export function renderAdminTop(): string {
   const body = `
   <h1>大洲市 道路破損通報 管理画面</h1>
-  <div class="note">
-    ⚠️ 現在、認証機能は未実装です（Step 9 で実装予定）。本番環境へのデプロイ前に必ず認証を設定してください。
-  </div>
   <div class="section">
     <h2>メニュー</h2>
     <ul>

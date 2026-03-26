@@ -367,14 +367,38 @@ Cloudflare Workers 上に管理者向け Web UI を実装する（サーバー�
 
 ---
 
-## Step 9: 認証・セキュリティ実装
+## Step 9: 認証・セキュリティ実装 ✅（2026-03-26）
 
-管理画面の認証と全体のセキュリティ強化を行う。
+管理画面の認証と全体のセキュリティ強化を行った。
 
-- [ ] 管理画面認証実装
-- [ ] Webhook 署名検証の堅牢化
-- [ ] 個人情報ログ抑制確認
-- [ ] プライバシーポリシーページ作成
+- [x] 管理画面認証実装（ログインフォーム + 署名付き Cookie セッション）
+- [x] 個人情報ログ抑制確認（webhook.ts・conversation.ts ともに問題なし）
+- [ ] Webhook 署名検証の堅牢化（現状で十分・後続 Step で検討）
+- [ ] プライバシーポリシーページ作成（src/app/privacy.ts に雛形あり）
+
+### 実施内容（2026-03-26）
+
+- [x] `src/app/admin/auth.ts` 新規作成
+  - `verifyPassword`: SHA-256 hex で定数時間比較（Web Crypto API）
+  - `createSessionToken` / `verifySessionToken`: HMAC-SHA256 署名付き Cookie（8時間有効）
+  - `requireAuth`: 認証ミドルウェア（未ログイン → /admin/login リダイレクト）
+  - `buildSessionCookieHeader` / `buildLogoutCookieHeader`: Set-Cookie ヘルパー
+- [x] `src/types.ts`: `ADMIN_SESSION_SECRET` 追加、`ADMIN_PASSWORD_HASH` コメントを SHA-256 hex に修正
+- [x] `src/app/admin/index.ts`: ログイン/ログアウトルート追加 + 全管理ルートに `requireAuth` 適用
+- [x] `src/app/admin/views.ts`: `renderLoginPage` 追加、管理トップの未認証警告削除、ナビにログアウトボタン追加
+- [x] `wrangler.toml`: `ADMIN_SESSION_SECRET` コメント追加
+- [x] `tests/app/admin.test.ts`: 全テストを auth Cookie 付きリクエストに更新 + 認証フロー新テスト追加（33 テスト）
+- [x] テスト全通過: 151 件（+9 件）
+
+### 採用判断メモ
+
+- セッションはステートレス（D1/KV 不使用）— HMAC-SHA256 署名 + 有効期限で改ざん検知
+- パスワードは bcrypt 非対応（Cloudflare Workers）→ SHA-256 hex に変更
+  - `ADMIN_PASSWORD_HASH` の生成: `echo -n "yourpassword" | sha256sum`
+- `ADMIN_SESSION_SECRET` は Cloudflare Workers Secrets（本番）/ `.dev.vars`（開発）に設定
+  - 生成例: `openssl rand -hex 32`
+- ログイン失敗時は理由を返さない（ユーザー名・パスワードどちらが違うか不明にする）
+- ユーザー名・パスワードはいかなるログにも出力しない（auth.ts コメントで明示）
 
 ---
 

@@ -10,7 +10,8 @@ export interface Env {
 
   // 管理画面認証
   ADMIN_USERNAME: string;
-  ADMIN_PASSWORD_HASH: string; // bcrypt ハッシュ
+  ADMIN_PASSWORD_HASH: string; // SHA-256 hex ハッシュ（echo -n "password" | sha256sum で生成）
+  ADMIN_SESSION_SECRET: string; // セッション Cookie の HMAC-SHA256 署名用シークレット
 
   // D1 データベース
   DB: D1Database;

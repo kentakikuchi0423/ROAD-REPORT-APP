@@ -40,6 +40,7 @@ const mockEnv: Env = {
   LINE_CHANNEL_ACCESS_TOKEN: TEST_TOKEN,
   ADMIN_USERNAME: "admin",
   ADMIN_PASSWORD_HASH: "hash",
+  ADMIN_SESSION_SECRET: "test-session-secret",
   DB: mockDb,
   IMAGES: {} as R2Bucket,
 };

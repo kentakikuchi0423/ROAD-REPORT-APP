@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleAdmin } from "../../src/app/admin/index";
+import { createSessionToken, SESSION_COOKIE_NAME, hashPassword } from "../../src/app/admin/auth";
 import * as db from "../../src/lib/db";
 import type { Env, Report } from "../../src/types";
 import type { ReportsPage } from "../../src/lib/db";
@@ -26,11 +27,16 @@ const mockCtx = {
   passThroughOnException: vi.fn(),
 } as unknown as ExecutionContext;
 
+const TEST_SESSION_SECRET = "test-session-secret";
+const TEST_USERNAME = "admin";
+const TEST_PASSWORD = "testpass";
+
 const mockEnv: Env = {
   LINE_CHANNEL_SECRET: "test-secret",
   LINE_CHANNEL_ACCESS_TOKEN: "test-token",
-  ADMIN_USERNAME: "admin",
-  ADMIN_PASSWORD_HASH: "hash",
+  ADMIN_USERNAME: TEST_USERNAME,
+  ADMIN_PASSWORD_HASH: "", // beforeEach で設定
+  ADMIN_SESSION_SECRET: TEST_SESSION_SECRET,
   DB: {} as D1Database,
   IMAGES: {} as R2Bucket,
 };
@@ -56,9 +62,23 @@ const sampleReport: Report = {
 
 const emptyPage: ReportsPage = { reports: [], total: 0 };
 
-/** テスト用リクエスト生成ヘルパー */
+/** テスト用リクエスト生成ヘルパー（認証なし） */
 function makeRequest(method: string, path: string, body?: unknown): Request {
   const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  return new Request(`http://localhost${path}`, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+}
+
+/** 有効なセッション Cookie を持つリクエストを生成するヘルパー */
+async function makeAuthRequest(method: string, path: string, body?: unknown): Promise<Request> {
+  const token = await createSessionToken(TEST_SESSION_SECRET);
+  const headers: Record<string, string> = {
+    Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+  };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   return new Request(`http://localhost${path}`, {
     method,
@@ -70,15 +90,119 @@ function makeRequest(method: string, path: string, body?: unknown): Request {
 // ---- テスト -----------------------------------------------------------------
 
 describe("handleAdmin", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // パスワードハッシュを設定
+    mockEnv.ADMIN_PASSWORD_HASH = await hashPassword(TEST_PASSWORD);
+  });
+
+  // ---- GET /admin/login -----------------------------------------------------
+
+  describe("GET /admin/login", () => {
+    it("200 + ログインフォーム HTML を返す", async () => {
+      const req = makeRequest("GET", "/admin/login");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toMatch(/text\/html/);
+    });
+
+    it("HTML にログインフォームが含まれる", async () => {
+      const req = makeRequest("GET", "/admin/login");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+      const html = await res.text();
+
+      expect(html).toContain('action="/admin/login"');
+      expect(html).toContain('name="username"');
+      expect(html).toContain('name="password"');
+    });
+
+    it("認証なしでもアクセスできる（302 にならない）", async () => {
+      const req = makeRequest("GET", "/admin/login");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(200);
+    });
+  });
+
+  // ---- POST /admin/login ----------------------------------------------------
+
+  describe("POST /admin/login", () => {
+    function makeLoginRequest(username: string, password: string): Request {
+      const body = new URLSearchParams({ username, password }).toString();
+      return new Request("http://localhost/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      });
+    }
+
+    it("正しい認証情報で 302 + Set-Cookie を返す", async () => {
+      const req = makeLoginRequest(TEST_USERNAME, TEST_PASSWORD);
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toBe("/admin");
+      expect(res.headers.get("Set-Cookie")).toContain(SESSION_COOKIE_NAME);
+    });
+
+    it("誤ったパスワードで 401 + エラーメッセージを返す", async () => {
+      const req = makeLoginRequest(TEST_USERNAME, "wrongpassword");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(401);
+      const html = await res.text();
+      expect(html).toContain("ユーザー名またはパスワードが違います");
+    });
+
+    it("誤ったユーザー名で 401 を返す", async () => {
+      const req = makeLoginRequest("wronguser", TEST_PASSWORD);
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(401);
+    });
+  });
+
+  // ---- POST /admin/logout ---------------------------------------------------
+
+  describe("POST /admin/logout", () => {
+    it("302 + Cookie 削除ヘッダーを返す", async () => {
+      const req = await makeAuthRequest("POST", "/admin/logout");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toBe("/admin/login");
+      const cookie = res.headers.get("Set-Cookie") ?? "";
+      expect(cookie).toContain(SESSION_COOKIE_NAME);
+      expect(cookie).toContain("Max-Age=0");
+    });
+  });
+
+  // ---- 未認証アクセス --------------------------------------------------------
+
+  describe("未認証アクセス", () => {
+    it("GET /admin（Cookie なし）は /admin/login へリダイレクト", async () => {
+      const req = makeRequest("GET", "/admin");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain("/admin/login");
+    });
+
+    it("GET /admin/reports（Cookie なし）は /admin/login へリダイレクト", async () => {
+      const req = makeRequest("GET", "/admin/reports");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain("/admin/login");
+    });
   });
 
   // ---- GET /admin -----------------------------------------------------------
 
   describe("GET /admin", () => {
     it("200 + text/html を返す", async () => {
-      const req = makeRequest("GET", "/admin");
+      const req = await makeAuthRequest("GET", "/admin");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
       expect(res.status).toBe(200);
@@ -86,7 +210,7 @@ describe("handleAdmin", () => {
     });
 
     it("レスポンス HTML に管理画面タイトルが含まれる", async () => {
-      const req = makeRequest("GET", "/admin");
+      const req = await makeAuthRequest("GET", "/admin");
       const res = await handleAdmin(req, mockEnv, mockCtx);
       const html = await res.text();
 
@@ -94,7 +218,7 @@ describe("handleAdmin", () => {
     });
 
     it("GET /admin/ （末尾スラッシュ）でも 200 を返す", async () => {
-      const req = makeRequest("GET", "/admin/");
+      const req = await makeAuthRequest("GET", "/admin/");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
       expect(res.status).toBe(200);
@@ -107,7 +231,7 @@ describe("handleAdmin", () => {
     it("200 + HTML を返し getReports を呼ぶ", async () => {
       mockGetReports.mockResolvedValue(emptyPage);
 
-      const req = makeRequest("GET", "/admin/reports");
+      const req = await makeAuthRequest("GET", "/admin/reports");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
       expect(res.status).toBe(200);
@@ -122,7 +246,7 @@ describe("handleAdmin", () => {
     it("通報データがある場合、受付番号が HTML に含まれる", async () => {
       mockGetReports.mockResolvedValue({ reports: [sampleReport], total: 1 });
 
-      const req = makeRequest("GET", "/admin/reports");
+      const req = await makeAuthRequest("GET", "/admin/reports");
       const res = await handleAdmin(req, mockEnv, mockCtx);
       const html = await res.text();
 
@@ -132,7 +256,7 @@ describe("handleAdmin", () => {
     it("?status=pending で getReports に status が渡される", async () => {
       mockGetReports.mockResolvedValue(emptyPage);
 
-      const req = makeRequest("GET", "/admin/reports?status=pending");
+      const req = await makeAuthRequest("GET", "/admin/reports?status=pending");
       await handleAdmin(req, mockEnv, mockCtx);
 
       expect(mockGetReports).toHaveBeenCalledWith(
@@ -144,7 +268,7 @@ describe("handleAdmin", () => {
     it("?status=in_progress でも status が渡される", async () => {
       mockGetReports.mockResolvedValue(emptyPage);
 
-      const req = makeRequest("GET", "/admin/reports?status=in_progress");
+      const req = await makeAuthRequest("GET", "/admin/reports?status=in_progress");
       await handleAdmin(req, mockEnv, mockCtx);
 
       expect(mockGetReports).toHaveBeenCalledWith(
@@ -156,7 +280,7 @@ describe("handleAdmin", () => {
     it("?status=unknown（不正値）は status=undefined で呼ばれる", async () => {
       mockGetReports.mockResolvedValue(emptyPage);
 
-      const req = makeRequest("GET", "/admin/reports?status=unknown");
+      const req = await makeAuthRequest("GET", "/admin/reports?status=unknown");
       await handleAdmin(req, mockEnv, mockCtx);
 
       const call = mockGetReports.mock.calls[0]!;
@@ -166,7 +290,7 @@ describe("handleAdmin", () => {
     it("?page=2 で offset=20 が渡される", async () => {
       mockGetReports.mockResolvedValue(emptyPage);
 
-      const req = makeRequest("GET", "/admin/reports?page=2");
+      const req = await makeAuthRequest("GET", "/admin/reports?page=2");
       await handleAdmin(req, mockEnv, mockCtx);
 
       expect(mockGetReports).toHaveBeenCalledWith(
@@ -178,7 +302,7 @@ describe("handleAdmin", () => {
     it("?page=invalid は page=1（offset=0）として扱う", async () => {
       mockGetReports.mockResolvedValue(emptyPage);
 
-      const req = makeRequest("GET", "/admin/reports?page=invalid");
+      const req = await makeAuthRequest("GET", "/admin/reports?page=invalid");
       await handleAdmin(req, mockEnv, mockCtx);
 
       expect(mockGetReports).toHaveBeenCalledWith(
@@ -194,7 +318,7 @@ describe("handleAdmin", () => {
     it("通報が存在する場合 200 + HTML を返す", async () => {
       mockGetReportById.mockResolvedValue(sampleReport);
 
-      const req = makeRequest("GET", "/admin/reports/1");
+      const req = await makeAuthRequest("GET", "/admin/reports/1");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
       expect(res.status).toBe(200);
@@ -205,7 +329,7 @@ describe("handleAdmin", () => {
     it("HTML に受付番号・ステータスが含まれる", async () => {
       mockGetReportById.mockResolvedValue(sampleReport);
 
-      const req = makeRequest("GET", "/admin/reports/1");
+      const req = await makeAuthRequest("GET", "/admin/reports/1");
       const res = await handleAdmin(req, mockEnv, mockCtx);
       const html = await res.text();
 
@@ -216,7 +340,7 @@ describe("handleAdmin", () => {
     it("通報が存在しない場合 404 + HTML を返す", async () => {
       mockGetReportById.mockResolvedValue(null);
 
-      const req = makeRequest("GET", "/admin/reports/999");
+      const req = await makeAuthRequest("GET", "/admin/reports/999");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
       expect(res.status).toBe(404);
@@ -224,7 +348,7 @@ describe("handleAdmin", () => {
     });
 
     it("非数値 ID の場合 400 + HTML を返す", async () => {
-      const req = makeRequest("GET", "/admin/reports/abc");
+      const req = await makeAuthRequest("GET", "/admin/reports/abc");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
       expect(res.status).toBe(400);
@@ -239,7 +363,7 @@ describe("handleAdmin", () => {
       const updated = { ...sampleReport, status: "in_progress" as const };
       mockUpdateReportStatus.mockResolvedValue(updated);
 
-      const req = makeRequest("PATCH", "/admin/reports/1/status", {
+      const req = await makeAuthRequest("PATCH", "/admin/reports/1/status", {
         status: "in_progress",
       });
       const res = await handleAdmin(req, mockEnv, mockCtx);
@@ -257,7 +381,7 @@ describe("handleAdmin", () => {
       const updated = { ...sampleReport, status: "resolved" as const };
       mockUpdateReportStatus.mockResolvedValue(updated);
 
-      const req = makeRequest("PATCH", "/admin/reports/1/status", {
+      const req = await makeAuthRequest("PATCH", "/admin/reports/1/status", {
         status: "resolved",
       });
       const res = await handleAdmin(req, mockEnv, mockCtx);
@@ -270,7 +394,7 @@ describe("handleAdmin", () => {
       const statuses = ["pending", "in_progress", "resolved", "rejected"] as const;
       for (const status of statuses) {
         mockUpdateReportStatus.mockResolvedValue({ ...sampleReport, status });
-        const req = makeRequest("PATCH", "/admin/reports/1/status", { status });
+        const req = await makeAuthRequest("PATCH", "/admin/reports/1/status", { status });
         const res = await handleAdmin(req, mockEnv, mockCtx);
         expect(res.status).toBe(200);
       }
@@ -279,7 +403,7 @@ describe("handleAdmin", () => {
     it("通報が存在しない場合 404 + JSON を返す", async () => {
       mockUpdateReportStatus.mockResolvedValue(null);
 
-      const req = makeRequest("PATCH", "/admin/reports/1/status", {
+      const req = await makeAuthRequest("PATCH", "/admin/reports/1/status", {
         status: "resolved",
       });
       const res = await handleAdmin(req, mockEnv, mockCtx);
@@ -290,7 +414,7 @@ describe("handleAdmin", () => {
     });
 
     it("不正なステータス値で 400 + JSON を返す", async () => {
-      const req = makeRequest("PATCH", "/admin/reports/1/status", {
+      const req = await makeAuthRequest("PATCH", "/admin/reports/1/status", {
         status: "invalid_status",
       });
       const res = await handleAdmin(req, mockEnv, mockCtx);
@@ -302,7 +426,7 @@ describe("handleAdmin", () => {
     });
 
     it("status フィールドなしのリクエストで 400 を返す", async () => {
-      const req = makeRequest("PATCH", "/admin/reports/1/status", {
+      const req = await makeAuthRequest("PATCH", "/admin/reports/1/status", {
         other: "field",
       });
       const res = await handleAdmin(req, mockEnv, mockCtx);
@@ -312,9 +436,13 @@ describe("handleAdmin", () => {
     });
 
     it("不正な JSON ボディで 400 + JSON を返す", async () => {
+      const token = await createSessionToken(TEST_SESSION_SECRET);
       const req = new Request("http://localhost/admin/reports/1/status", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+        },
         body: "not-valid-json",
       });
       const res = await handleAdmin(req, mockEnv, mockCtx);
@@ -325,7 +453,7 @@ describe("handleAdmin", () => {
     });
 
     it("非数値 ID で 400 + JSON を返す", async () => {
-      const req = makeRequest("PATCH", "/admin/reports/abc/status", {
+      const req = await makeAuthRequest("PATCH", "/admin/reports/abc/status", {
         status: "pending",
       });
       const res = await handleAdmin(req, mockEnv, mockCtx);
@@ -338,7 +466,7 @@ describe("handleAdmin", () => {
 
   describe("不明なルート", () => {
     it("GET /admin/unknown は 404 + HTML を返す", async () => {
-      const req = makeRequest("GET", "/admin/unknown");
+      const req = await makeAuthRequest("GET", "/admin/unknown");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
       expect(res.status).toBe(404);
@@ -346,7 +474,7 @@ describe("handleAdmin", () => {
     });
 
     it("POST /admin/reports は 404 を返す（未定義メソッド）", async () => {
-      const req = makeRequest("POST", "/admin/reports");
+      const req = await makeAuthRequest("POST", "/admin/reports");
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
       expect(res.status).toBe(404);

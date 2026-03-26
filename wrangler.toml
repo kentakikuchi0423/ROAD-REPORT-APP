@@ -24,7 +24,8 @@ bucket_name = "ozu-road-report-images"
 # LINE_CHANNEL_SECRET = ""
 # LINE_CHANNEL_ACCESS_TOKEN = ""
 # ADMIN_USERNAME = ""
-# ADMIN_PASSWORD_HASH = ""
+# ADMIN_PASSWORD_HASH = ""  # SHA-256 hex（echo -n "yourpassword" | sha256sum）
+# ADMIN_SESSION_SECRET = "" # ランダムな長い文字列（openssl rand -hex 32 等）
 
 [env.production]
 name = "ozu-road-report-prod"

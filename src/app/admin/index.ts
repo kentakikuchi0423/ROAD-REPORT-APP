@@ -2,12 +2,15 @@
  * 管理画面ルートハンドラ
  *
  * ルーティング:
+ *   GET  /admin/login                - ログインページ（認証不要）
+ *   POST /admin/login                - ログイン処理（認証不要）
+ *   POST /admin/logout               - ログアウト処理
  *   GET  /admin                      - 管理トップ
  *   GET  /admin/reports              - 通報一覧（ページネーション・ステータスフィルタ）
  *   GET  /admin/reports/:id          - 通報詳細
  *   PATCH /admin/reports/:id/status  - ステータス更新（JSON API）
  *
- * 認証は Step 9 で実装予定。
+ * ログイン・ログアウト以外の全ルートは requireAuth で保護する。
  */
 
 import type { Env, ReportStatus } from "../../types";
@@ -17,7 +20,14 @@ import {
   renderReportList,
   renderReportDetail,
   renderErrorPage,
+  renderLoginPage,
 } from "./views";
+import {
+  requireAuth,
+  verifyPassword,
+  buildSessionCookieHeader,
+  buildLogoutCookieHeader,
+} from "./auth";
 
 // ---- 定数 -------------------------------------------------------------------
 
@@ -68,6 +78,34 @@ export async function handleAdmin(
     //     /admin/reports/42        → ["", "admin", "reports", "42"]
     //     /admin/reports/42/status → ["", "admin", "reports", "42", "status"]
     const segments = pathname.split("/");
+
+    // ---- 認証不要ルート -------------------------------------------------------
+
+    // GET /admin/login
+    if (method === "GET" && segments[2] === "login" && segments.length === 3) {
+      return htmlResponse(renderLoginPage());
+    }
+
+    // POST /admin/login
+    if (method === "POST" && segments[2] === "login" && segments.length === 3) {
+      return await handleLogin(request, env);
+    }
+
+    // POST /admin/logout
+    if (method === "POST" && segments[2] === "logout" && segments.length === 3) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: "/admin/login",
+          "Set-Cookie": buildLogoutCookieHeader(),
+        },
+      });
+    }
+
+    // ---- 認証が必要なルート ---------------------------------------------------
+
+    const authResponse = await requireAuth(request, env);
+    if (authResponse) return authResponse;
 
     // GET /admin または GET /admin/
     if (
@@ -126,7 +164,43 @@ export async function handleAdmin(
   }
 }
 
-// ---- ルートハンドラ ----------------------------------------------------------
+// ---- 認証ルートハンドラ ------------------------------------------------------
+
+async function handleLogin(request: Request, env: Env): Promise<Response> {
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return htmlResponse(renderLoginPage("リクエストの形式が不正です。"), 400);
+  }
+
+  const username = formData.get("username");
+  const password = formData.get("password");
+
+  // ユーザー名・パスワードをログに出さない
+  if (
+    typeof username !== "string" ||
+    typeof password !== "string" ||
+    username !== env.ADMIN_USERNAME ||
+    !(await verifyPassword(password, env.ADMIN_PASSWORD_HASH))
+  ) {
+    return htmlResponse(
+      renderLoginPage("ユーザー名またはパスワードが違います。"),
+      401,
+    );
+  }
+
+  const sessionCookie = await buildSessionCookieHeader(env.ADMIN_SESSION_SECRET);
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: "/admin",
+      "Set-Cookie": sessionCookie,
+    },
+  });
+}
+
+// ---- 管理ルートハンドラ ------------------------------------------------------
 
 async function handleReportList(
   env: Env,
