@@ -312,14 +312,58 @@ confirming ステップ（「送信する」/「やり直す」）と受付番�
 
 ## Step 8: 管理画面実装
 
-Cloudflare Pages 上に管理者向け Web UI を実装する。
+Cloudflare Workers 上に管理者向け Web UI を実装する（サーバーサイドレンダリング HTML）。
 
-- [ ] 通報一覧画面
-- [ ] 通報詳細画面
-- [ ] ステータス変更機能
-- [ ] CSV 出力機能
-- [ ] 写真ダウンロード機能
-- [ ] 通報削除機能
+### Step 8a: 管理画面基本実装 ✅（2026-03-26）
+
+- [x] DB ヘルパー追加（getReports / getReportById / updateReportStatus）（src/lib/db.ts）
+- [x] 管理画面ルートハンドラ実装（src/app/admin/index.ts）
+- [x] HTML ビュー関数実装（src/app/admin/views.ts）
+- [x] 管理トップページ（GET /admin）
+- [x] 通報一覧ページ（GET /admin/reports）— ページネーション・ステータスフィルタ付き
+- [x] 通報詳細ページ（GET /admin/reports/:id）— 全フィールド表示・Google Maps リンク・写真プレースホルダ
+- [x] ステータス更新 API（PATCH /admin/reports/:id/status）— JSON API、詳細ページから fetch 呼び出し
+
+### 採用判断メモ
+
+- HTML テンプレートを `views.ts` に分離（routing 関心と表示関心を分けて保守性向上）
+- ステータス更新は PATCH + fetch（JavaScript 最小限、ページリロードで反映）
+- 写真は R2 署名付き URL 未実装のためプレースホルダ表示（R2 キーのみ表示）
+- XSS 対策: ユーザー入力フィールドはすべて `escapeHtml()` でエスケープ
+- 日時表示: `Intl.DateTimeFormat` で JST 変換（arithmetic 不要）
+- ページサイズ: 20 件（自治体用途として十分）
+
+### Step 8c: 管理画面 UI 改善 ✅（2026-03-26）
+
+- [x] バグ修正: 一覧テーブルの空データ行の colspan を 7 → 6 に修正
+- [x] 一覧: 受付番号リンクと「詳細」リンクの重複を解消（受付番号のみリンク化）
+- [x] 一覧: 「操作」列 → 「ステータス変更」列（インライン select + 更新ボタン）に変更
+  - 更新成功時: バッジ即時更新 + ボタンを一時的に「✓」表示（リロードなし）
+- [x] 詳細: ステータス更新フォームを「基本情報」直後に移動（スクロール不要）
+- [x] 詳細: 更新成功時に「✓ 更新しました」メッセージを 3 秒表示（リロードなし・バッジ即時更新）
+- [x] 詳細: 撮影日付を「位置情報」セクションから「補足・通報者情報」セクションへ移動
+- [x] テスト全通過: 142 件（変更なし）
+
+### Step 8b: 管理画面テスト追加 ✅（2026-03-26）
+
+- [x] tests/app/admin.test.ts 新規作成（24 テスト）
+  - GET /admin トップページ（HTML・タイトル確認）
+  - GET /admin/reports 一覧（getReports 呼び出し・ステータスフィルタ・ページネーション・不正値）
+  - GET /admin/reports/:id 詳細（正常・404・不正ID）
+  - PATCH /admin/reports/:id/status 更新（全4ステータス・404・不正JSON・不正ステータス）
+  - 不明ルート 404
+- [x] tests/lib/db.test.ts に管理画面 DB 関数テストを追記（+9 テスト、計 21 テスト）
+  - getReports: フィルタなし・フィルタあり・0件・camelCase変換
+  - getReportById: 存在あり・存在なし
+  - updateReportStatus: 更新成功・対象なし・SQL 引数確認
+- [x] テスト全通過: 142 件（+33 件）
+
+### 残課題
+
+- [ ] 署名付き URL による写真表示（Step 6 / Step 9 で対応）
+- [ ] 認証（Step 9 で対応）
+- [ ] CSV 出力（後続 Step）
+- [ ] 写真ダウンロード・削除（後続 Step）
 
 ---
 

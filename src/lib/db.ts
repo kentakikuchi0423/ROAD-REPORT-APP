@@ -2,7 +2,7 @@
  * Cloudflare D1 データベースヘルパー
  */
 
-import type { ConversationSession, Report } from "../types";
+import type { ConversationSession, Report, ReportStatus } from "../types";
 
 // ---- 受付番号 ----------------------------------------------------------------
 
@@ -225,4 +225,90 @@ export async function deleteSession(
     .prepare("DELETE FROM sessions WHERE line_user_id = ?")
     .bind(lineUserId)
     .run();
+}
+
+// ---- 管理画面用クエリ --------------------------------------------------------
+
+export interface GetReportsOptions {
+  status?: ReportStatus;
+  limit: number;
+  offset: number;
+}
+
+export interface ReportsPage {
+  reports: Report[];
+  total: number;
+}
+
+/**
+ * 通報一覧を取得する（status フィルタ・ページネーション対応）。
+ */
+export async function getReports(
+  db: D1Database,
+  options: GetReportsOptions,
+): Promise<ReportsPage> {
+  const { status, limit, offset } = options;
+
+  if (status !== undefined) {
+    const countRow = await db
+      .prepare("SELECT COUNT(*) AS cnt FROM reports WHERE status = ?")
+      .bind(status)
+      .first<{ cnt: number }>();
+    const total = countRow?.cnt ?? 0;
+
+    const rows = await db
+      .prepare(
+        "SELECT * FROM reports WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+      )
+      .bind(status, limit, offset)
+      .all<ReportRow>();
+
+    return { reports: rows.results.map(rowToReport), total };
+  }
+
+  const countRow = await db
+    .prepare("SELECT COUNT(*) AS cnt FROM reports")
+    .first<{ cnt: number }>();
+  const total = countRow?.cnt ?? 0;
+
+  const rows = await db
+    .prepare("SELECT * FROM reports ORDER BY created_at DESC LIMIT ? OFFSET ?")
+    .bind(limit, offset)
+    .all<ReportRow>();
+
+  return { reports: rows.results.map(rowToReport), total };
+}
+
+/**
+ * ID で単一通報を取得する。存在しない場合は null を返す。
+ */
+export async function getReportById(
+  db: D1Database,
+  id: number,
+): Promise<Report | null> {
+  const row = await db
+    .prepare("SELECT * FROM reports WHERE id = ?")
+    .bind(id)
+    .first<ReportRow>();
+
+  return row ? rowToReport(row) : null;
+}
+
+/**
+ * ステータスを更新し、更新後レコードを返す。id 不一致時は null を返す。
+ */
+export async function updateReportStatus(
+  db: D1Database,
+  id: number,
+  status: ReportStatus,
+): Promise<Report | null> {
+  const now = new Date().toISOString();
+  const row = await db
+    .prepare(
+      "UPDATE reports SET status = ?, updated_at = ? WHERE id = ? RETURNING *",
+    )
+    .bind(status, now, id)
+    .first<ReportRow>();
+
+  return row ? rowToReport(row) : null;
 }

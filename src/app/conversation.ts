@@ -295,7 +295,7 @@ async function handleNoSession(
 ): Promise<void> {
   const isStartTrigger =
     event.message.type === "text" &&
-    (event.message as webhook.TextMessageContent).text.trim() === "通報する";
+    event.message.text.trim() === "通報する";
 
   if (isStartTrigger) {
     const now = new Date().toISOString();
@@ -339,7 +339,7 @@ async function handleConsentStep(
     return;
   }
 
-  const text = (event.message as webhook.TextMessageContent).text.trim();
+  const text = event.message.text.trim();
 
   if (text === "キャンセル") {
     await deleteSession(env.DB, session.lineUserId);
@@ -478,7 +478,7 @@ async function handleLocationStep(
     return;
   }
 
-  const { latitude, longitude, address } = event.message as webhook.LocationMessageContent;
+  const { latitude, longitude, address } = event.message;
 
   const updatedData: ConversationSession["data"] = {
     ...session.data,
@@ -537,7 +537,7 @@ async function handleOptionalTextStep(
     return;
   }
 
-  const text = (event.message as webhook.TextMessageContent).text.trim();
+  const text = event.message.text.trim();
 
   let nextData = session.data;
   if (text !== SKIP_TEXT) {
@@ -587,7 +587,7 @@ async function handleConfirmingStep(
     return;
   }
 
-  const text = (event.message as webhook.TextMessageContent).text.trim();
+  const text = event.message.text.trim();
 
   if (text === "やり直す") {
     // consent ステップに戻し、データをリセット

@@ -19,12 +19,24 @@ export default tseslint.config(
       ],
       // console.log は warn（本番コードでは使わない）
       "no-console": "warn",
+      // number はテンプレートリテラルで合法的に使用する
+      "@typescript-eslint/restrict-template-expressions": [
+        "error",
+        { allowNumber: true },
+      ],
     },
   },
   {
     // テストファイルは型チェック付きルールを緩和
     files: ["tests/**/*.ts"],
     ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    // テストファイルは非 null アサーション（!）を許可
+    files: ["tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-non-null-assertion": "off",
+    },
   },
   {
     ignores: ["dist/**", ".wrangler/**", "node_modules/**"],

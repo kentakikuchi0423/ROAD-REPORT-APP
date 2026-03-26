@@ -9,6 +9,9 @@ import {
   getSession,
   upsertSession,
   deleteSession,
+  getReports,
+  getReportById,
+  updateReportStatus,
 } from "../../src/lib/db";
 import type { ConversationSession } from "../../src/types";
 
@@ -173,5 +176,175 @@ describe("deleteSession", () => {
     );
     expect(bindFn).toHaveBeenCalledWith("U789");
     expect(runFn).toHaveBeenCalled();
+  });
+});
+
+// ---- getReports / getReportById / updateReportStatus -----------------------
+
+/** テスト用の reports テーブル行（snake_case） */
+const sampleRow = {
+  id: 1,
+  receipt_number: "OZU-20260325-001",
+  line_user_id: "Utest",
+  status: "pending",
+  close_photo_key: "reports/20260325/uuid/close.jpg",
+  far_photo_key: "reports/20260325/uuid/far.jpg",
+  latitude: 33.5057,
+  longitude: 132.5497,
+  location_address: "愛媛県大洲市大洲1番地",
+  shooting_date: "2026-03-25",
+  remarks: "道路にひび割れあり",
+  reporter_name: "山田太郎",
+  reporter_phone: "09012345678",
+  created_at: "2026-03-25T10:00:00.000Z",
+  updated_at: "2026-03-25T10:00:00.000Z",
+};
+
+/**
+ * getReports 用 D1 モック。
+ * COUNT クエリ:
+ *   - status なし → prepare().first() （bind なし）
+ *   - status あり → prepare().bind().first()
+ * DATA クエリ: prepare().bind().all()
+ */
+function makeGetReportsDb(
+  total: number,
+  rows: typeof sampleRow[],
+): D1Database {
+  return {
+    prepare: vi.fn().mockImplementation((sql: string) => {
+      if ((sql as string).includes("COUNT")) {
+        const firstFn = vi.fn().mockResolvedValue({ cnt: total });
+        return {
+          first: firstFn, // status なし: .prepare().first()
+          bind: vi.fn().mockReturnValue({ first: firstFn }), // status あり: .prepare().bind().first()
+        };
+      }
+      return {
+        bind: vi.fn().mockReturnValue({
+          all: vi.fn().mockResolvedValue({ results: rows }),
+        }),
+      };
+    }),
+  } as unknown as D1Database;
+}
+
+describe("getReports", () => {
+  it("status フィルタなし: 全件数と Report 配列を返す", async () => {
+    const db = makeGetReportsDb(1, [sampleRow]);
+    const result = await getReports(db, { limit: 20, offset: 0 });
+
+    expect(result.total).toBe(1);
+    expect(result.reports).toHaveLength(1);
+    expect(result.reports[0]!.receiptNumber).toBe("OZU-20260325-001");
+    expect(result.reports[0]!.status).toBe("pending");
+  });
+
+  it("status フィルタあり: WHERE 句付きで照会される", async () => {
+    const db = makeGetReportsDb(1, [sampleRow]);
+    const prepareMock = db.prepare as ReturnType<typeof vi.fn>;
+
+    await getReports(db, { status: "pending", limit: 20, offset: 0 });
+
+    // COUNT クエリと DATA クエリの両方に status バインドが渡されることを確認
+    const sqlCalls = prepareMock.mock.calls.map((c: unknown[]) => c[0] as string);
+    expect(sqlCalls.some((sql) => sql.includes("WHERE status"))).toBe(true);
+  });
+
+  it("0 件の場合は total=0 + 空配列を返す", async () => {
+    const db = makeGetReportsDb(0, []);
+    const result = await getReports(db, { limit: 20, offset: 0 });
+
+    expect(result.total).toBe(0);
+    expect(result.reports).toHaveLength(0);
+  });
+
+  it("snake_case の DB 行が camelCase の Report に変換される", async () => {
+    const db = makeGetReportsDb(1, [sampleRow]);
+    const result = await getReports(db, { limit: 20, offset: 0 });
+    const report = result.reports[0]!;
+
+    expect(report.lineUserId).toBe("Utest");
+    expect(report.closePhotoKey).toBe("reports/20260325/uuid/close.jpg");
+    expect(report.locationAddress).toBe("愛媛県大洲市大洲1番地");
+    expect(report.reporterName).toBe("山田太郎");
+  });
+});
+
+describe("getReportById", () => {
+  it("通報が存在する場合は Report を返す", async () => {
+    const db = {
+      prepare: vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnValue({
+          first: vi.fn().mockResolvedValue(sampleRow),
+        }),
+      }),
+    } as unknown as D1Database;
+
+    const report = await getReportById(db, 1);
+    expect(report).not.toBeNull();
+    expect(report?.id).toBe(1);
+    expect(report?.receiptNumber).toBe("OZU-20260325-001");
+  });
+
+  it("通報が存在しない場合は null を返す", async () => {
+    const db = {
+      prepare: vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnValue({
+          first: vi.fn().mockResolvedValue(null),
+        }),
+      }),
+    } as unknown as D1Database;
+
+    const report = await getReportById(db, 999);
+    expect(report).toBeNull();
+  });
+});
+
+describe("updateReportStatus", () => {
+  it("更新成功時: 更新後の Report を返す", async () => {
+    const updatedRow = { ...sampleRow, status: "in_progress" };
+    const db = {
+      prepare: vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnValue({
+          first: vi.fn().mockResolvedValue(updatedRow),
+        }),
+      }),
+    } as unknown as D1Database;
+
+    const report = await updateReportStatus(db, 1, "in_progress");
+    expect(report).not.toBeNull();
+    expect(report?.status).toBe("in_progress");
+    expect(report?.id).toBe(1);
+  });
+
+  it("対象行が存在しない場合は null を返す", async () => {
+    const db = {
+      prepare: vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnValue({
+          first: vi.fn().mockResolvedValue(null),
+        }),
+      }),
+    } as unknown as D1Database;
+
+    const report = await updateReportStatus(db, 999, "resolved");
+    expect(report).toBeNull();
+  });
+
+  it("UPDATE クエリに status と updated_at が渡される", async () => {
+    const db = {
+      prepare: vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnValue({
+          first: vi.fn().mockResolvedValue({ ...sampleRow, status: "resolved" }),
+        }),
+      }),
+    } as unknown as D1Database;
+
+    await updateReportStatus(db, 1, "resolved");
+    const bindFn = (db.prepare as ReturnType<typeof vi.fn>).mock.results[0]
+      ?.value.bind as ReturnType<typeof vi.fn>;
+    const [status, , id] = bindFn.mock.calls[0] as [string, string, number];
+    expect(status).toBe("resolved");
+    expect(id).toBe(1);
   });
 });
