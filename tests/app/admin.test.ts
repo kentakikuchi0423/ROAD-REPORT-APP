@@ -528,7 +528,7 @@ describe("handleAdmin", () => {
   describe("GET /admin/reports/:id/images/:type", () => {
     const mockR2Body = new ReadableStream();
 
-    it("close 画像が存在する場合 200 + image/jpeg を返す", async () => {
+    it("close 画像が存在する場合 200 + image/jpeg を返す（デフォルト: inline）", async () => {
       mockGetReportById.mockResolvedValue(sampleReport);
       mockDownloadImage.mockResolvedValue({
         body: mockR2Body,
@@ -540,11 +540,25 @@ describe("handleAdmin", () => {
 
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toBe("image/jpeg");
-      expect(res.headers.get("content-disposition")).toMatch(/attachment/);
+      expect(res.headers.get("content-disposition")).toMatch(/inline/);
       expect(mockDownloadImage).toHaveBeenCalledWith(
         mockEnv.IMAGES,
         sampleReport.closePhotoKey,
       );
+    });
+
+    it("close 画像に ?dl=1 を付けると attachment（ダウンロード）になる", async () => {
+      mockGetReportById.mockResolvedValue(sampleReport);
+      mockDownloadImage.mockResolvedValue({
+        body: mockR2Body,
+        httpMetadata: { contentType: "image/jpeg" },
+      } as unknown as R2ObjectBody);
+
+      const req = await makeAuthRequest("GET", "/admin/reports/1/images/close?dl=1");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-disposition")).toMatch(/attachment/);
     });
 
     it("far 画像が存在する場合 200 を返し farPhotoKey が使われる", async () => {

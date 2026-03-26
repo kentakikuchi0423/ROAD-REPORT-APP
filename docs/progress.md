@@ -651,3 +651,63 @@ npm run d1:migrate:local   # D1 migration 適用（初回・migration 追加時�
 npm run dev                # 開発サーバー起動
 # → http://localhost:8787/ を開く
 ```
+
+---
+
+## Step 10e: UX/UI改善（誤タップ防止・管理画面モダン化・写真プレビュー） ✅（2026-03-26）
+
+LINE キャンセル確認フロー・管理画面 UI 統一・写真プレビュー実装を行った。
+
+### Step A: キャンセル確認フロー（誤タップ防止）
+
+- [x] `src/types.ts`: `ConversationStep` に `"cancelling"` を追加
+- [x] `src/types.ts`: `ConversationSession.data` に `previousStep?: ConversationStep` を追加
+- [x] `src/app/conversation.ts`:
+  - `enterCancellingStep()`: キャンセルボタン押下時に即キャンセルせず `cancelling` ステップへ遷移するヘルパーを追加
+  - `handleCancelIfRequested()`: 即キャンセル → `enterCancellingStep()` 呼び出しに変更
+  - `handleOptionalTextStep()` / `handleConfirmingStep()` のインラインキャンセル処理も `enterCancellingStep()` に統一
+  - `handleCancellingStep()`: 「はい、中止します」→ deleteSession + キャンセルメッセージ / 「いいえ、続けます」→ previousStep に復帰
+  - `getStepResumeMessage()`: ステップ別の再案内メッセージを返すヘルパー（close_photo ～ confirming の 8 ステップ対応）
+  - `cancelling` ステップを switch 文に追加
+- [x] `tests/app/conversation.test.ts`: cancelling ステップのテスト追加（+8 テスト、計 202 テスト）
+  - 各ステップで「通報を中止する」→ cancelling 遷移（previousStep 保存）
+  - 「はい、中止します」→ deleteSession
+  - 「いいえ、続けます」→ previousStep 復帰 + 再案内 QR
+  - その他・非テキスト → 確認 QR 再案内
+
+### Step B: 管理画面 UI 改善
+
+- [x] `src/app/admin/views.ts`:
+  - CSS 変数 `--color-brand` / `--color-brand-dark` を導入し、重複カラーコード (`#2a6496`, `#1a4066`) を一元管理
+  - ステータスバッジをインラインスタイルから CSS クラスベース（`.badge .badge--{status}`）に変更
+    - `pending`: amber tint（背景薄黄・濃い文字・アンバー枠）→ 未対応で目立つ
+    - `in_progress`: solid blue（ブランドカラー・白文字）→ 対応中で最も強調
+    - `resolved`: solid green → 完了
+    - `rejected`: solid gray → 対応不要（淡く目立たない）
+  - 一覧テーブルの終了系ステータス（resolved / rejected）行に `.row--closed` クラスを付与 → 淡灰色で淡く表示
+  - 詳細 `.section h2` に左ボーダー（`border-left: 3px solid var(--color-brand)`）追加 → セクション区切りを強調
+  - `.danger-section h2` の左ボーダー色を赤に上書き
+  - JS の `makeBadge` 関数を CSS クラス生成方式に変更（`STATUS_COLORS_JSON` → `STATUS_BADGE_CLASSES_JSON`）
+  - 写真エリアを `.photo-placeholder`（dashed border）→ `.photo-card`（solid border, 画像プレビュー対応）に変更
+
+### Step C: 写真プレビュー実装
+
+- [x] `src/app/admin/index.ts`: `handleImageDownload` に `download: boolean` 引数を追加
+  - `download=true` → `Content-Disposition: attachment`（ダウンロード）
+  - `download=false`（デフォルト）→ `Content-Disposition: inline`（`<img>` タグ・新タブ表示対応）
+  - `Cache-Control: private, max-age=300` を追加（管理者認証済み・5分キャッシュ）
+  - ルートハンドラで `?dl` クエリパラメータを検出し `download` 引数に渡す
+- [x] `src/app/admin/views.ts`: 詳細ページ写真セクションを更新
+  - `<img src="...images/close">` でインラインプレビュー（height: 200px, object-fit: cover）
+  - クリックで `target="_blank"` の新タブ原寸大表示
+  - 「ダウンロード」リンクは `?dl=1` 付き URL + `download` 属性
+- [x] `tests/app/admin.test.ts`: 画像エンドポイントのテスト更新（+1 テスト、計 203 テスト）
+  - デフォルト（パラメータなし）→ `inline` を確認
+  - `?dl=1` 付き → `attachment` を確認
+
+### 採用判断メモ
+
+- キャンセル確認の「いいえ、続けます」で使う再案内メッセージは `getStepResumeMessage()` に集約（switch + リトライメッセージ定数の再利用）
+- consent ステップの「キャンセル」は即時キャンセルのまま維持（確認不要な導線）
+- R2 の公開設定不要・署名 URL 不要：Workers が認証 Cookie 確認後 R2 からプロキシする設計を維持
+- 写真プレビューはシンプルに `<img>` + 新タブリンクの組み合わせ（外部ライブラリ不使用・保守性優先）

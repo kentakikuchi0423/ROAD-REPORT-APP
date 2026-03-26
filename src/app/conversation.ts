@@ -14,7 +14,9 @@
  *   - confirming       → 「送信する」→ D1 登録 + 受付番号発行 / 「やり直す」→ consent ステップへ
  *
  * キャンセル方針:
- *   consent 以降の全ステップで「通報を中止する」テキストを受け取ると即時キャンセル。
+ *   consent 以降の全ステップで「通報を中止する」テキストを受け取ると cancelling ステップへ遷移。
+ *   cancelling ステップで「はい、中止します」→ セッション削除。
+ *   cancelling ステップで「いいえ、続けます」→ 元のステップへ復帰。
  *   R2 に保存済みの写真は孤立オブジェクトとして残る（管理コスト軽微なため許容）。
  *
  * postback 処理:
@@ -79,6 +81,15 @@ const MSG_RETRY_CONSENT =
 /** キャンセル時のメッセージ */
 const MSG_CANCELLED =
   "通報を中止しました。\n再度通報する場合は「通報する」と送信してください。";
+
+/** キャンセル確認メッセージ（cancelling ステップ） */
+const MSG_CANCEL_CONFIRM =
+  "通報を中止してよろしいですか？\n入力中の内容はすべて失われます。";
+
+/** キャンセル確認「はい」のテキスト */
+const CANCEL_CONFIRM_YES = "はい、中止します";
+/** キャンセル確認「いいえ」のテキスト */
+const CANCEL_CONFIRM_NO = "いいえ、続けます";
 
 const MSG_REQUEST_CLOSE_PHOTO = [
   "ありがとうございます。通報を開始します。",
@@ -181,6 +192,14 @@ const QR_ITEM_CANCEL = {
   action: { type: "message", label: "通報を中止する", text: CANCEL_TEXT },
 };
 
+/** キャンセル確認 Quick Reply（cancelling ステップ用） */
+const QUICK_REPLY_CANCEL_CONFIRM = {
+  items: [
+    { type: "action", action: { type: "message", label: CANCEL_CONFIRM_YES, text: CANCEL_CONFIRM_YES } },
+    { type: "action", action: { type: "message", label: CANCEL_CONFIRM_NO, text: CANCEL_CONFIRM_NO } },
+  ],
+};
+
 /** 利用同意 Quick Reply（「同意する」「キャンセル」） */
 const QUICK_REPLY_CONSENT = {
   items: [
@@ -263,8 +282,31 @@ function buildShootingDateQuickReply(): unknown {
 // ---- キャンセル共通処理 -----------------------------------------------------
 
 /**
- * テキストメッセージが「通報を中止する」であればセッションを削除してキャンセル返信する。
- * @returns キャンセル処理を行った場合 true
+ * cancelling ステップへ遷移し、キャンセル確認メッセージを返信する。
+ * 遷移前のステップを session.data.previousStep に保持する。
+ */
+async function enterCancellingStep(
+  session: ConversationSession,
+  env: Env,
+  replyToken: string,
+): Promise<void> {
+  const updated: ConversationSession = {
+    ...session,
+    step: "cancelling",
+    data: { ...session.data, previousStep: session.step },
+    updatedAt: new Date().toISOString(),
+  };
+  await upsertSession(env.DB, updated);
+  await replyMessage(
+    replyToken,
+    [{ type: "text", text: MSG_CANCEL_CONFIRM, quickReply: QUICK_REPLY_CANCEL_CONFIRM }],
+    env.LINE_CHANNEL_ACCESS_TOKEN,
+  );
+}
+
+/**
+ * テキストメッセージが「通報を中止する」であれば cancelling ステップへ遷移する。
+ * @returns キャンセル確認フローへ遷移した場合 true
  */
 async function handleCancelIfRequested(
   event: webhook.MessageEvent,
@@ -274,12 +316,7 @@ async function handleCancelIfRequested(
 ): Promise<boolean> {
   if (event.message.type !== "text") return false;
   if (event.message.text.trim() !== CANCEL_TEXT) return false;
-  await deleteSession(env.DB, session.lineUserId);
-  await replyMessage(
-    replyToken,
-    [{ type: "text", text: MSG_CANCELLED }],
-    env.LINE_CHANNEL_ACCESS_TOKEN,
-  );
+  await enterCancellingStep(session, env, replyToken);
   return true;
 }
 
@@ -373,6 +410,10 @@ export async function handleConversationMessage(
 
     case "confirming":
       await handleConfirmingStep(event, session, env, replyToken);
+      break;
+
+    case "cancelling":
+      await handleCancellingStep(event, session, env, replyToken);
       break;
 
     case "completed":
@@ -656,14 +697,8 @@ async function handleOptionalTextStep(
 
   const text = event.message.text.trim();
 
-  // キャンセル検出
   if (text === CANCEL_TEXT) {
-    await deleteSession(env.DB, session.lineUserId);
-    await replyMessage(
-      replyToken,
-      [{ type: "text", text: MSG_CANCELLED }],
-      env.LINE_CHANNEL_ACCESS_TOKEN,
-    );
+    await enterCancellingStep(session, env, replyToken);
     return;
   }
 
@@ -718,12 +753,7 @@ async function handleConfirmingStep(
   const text = event.message.text.trim();
 
   if (text === CANCEL_TEXT) {
-    await deleteSession(env.DB, session.lineUserId);
-    await replyMessage(
-      replyToken,
-      [{ type: "text", text: MSG_CANCELLED }],
-      env.LINE_CHANNEL_ACCESS_TOKEN,
-    );
+    await enterCancellingStep(session, env, replyToken);
     return;
   }
 
@@ -823,6 +853,102 @@ async function handleConfirmingStep(
     [{ type: "text", text: buildCompletionMessage(report.receiptNumber) }],
     env.LINE_CHANNEL_ACCESS_TOKEN,
   );
+}
+
+// ---- cancelling ステップ -------------------------------------------------------
+
+/**
+ * ステップに対応する「再案内メッセージ」を返す。
+ * cancelling → 「いいえ、続けます」で元のステップへ戻る際に使用。
+ */
+function getStepResumeMessage(
+  step: ConversationStep,
+  data: ConversationSession["data"],
+): { text: string; quickReply?: unknown } | null {
+  switch (step) {
+    case "close_photo":
+      return { text: MSG_RETRY_CLOSE_PHOTO, quickReply: QUICK_REPLY_PHOTO };
+    case "far_photo":
+      return { text: MSG_RETRY_FAR_PHOTO, quickReply: QUICK_REPLY_PHOTO };
+    case "location":
+      return { text: MSG_RETRY_LOCATION, quickReply: QUICK_REPLY_LOCATION };
+    case "shooting_date":
+      return { text: MSG_REQUEST_SHOOTING_DATE, quickReply: buildShootingDateQuickReply() };
+    case "remarks":
+      return { text: MSG_REQUEST_REMARKS, quickReply: QUICK_REPLY_SKIP_CANCEL };
+    case "reporter_name":
+      return { text: MSG_REQUEST_REPORTER_NAME, quickReply: QUICK_REPLY_SKIP_CANCEL };
+    case "reporter_phone":
+      return { text: MSG_REQUEST_REPORTER_PHONE, quickReply: QUICK_REPLY_SKIP_CANCEL };
+    case "confirming":
+      return { text: buildSummaryMessage(data), quickReply: QUICK_REPLY_CONFIRMING };
+    default:
+      return null;
+  }
+}
+
+async function handleCancellingStep(
+  event: webhook.MessageEvent,
+  session: ConversationSession,
+  env: Env,
+  replyToken: string,
+): Promise<void> {
+  const reConfirm = async () =>
+    replyMessage(
+      replyToken,
+      [{ type: "text", text: MSG_CANCEL_CONFIRM, quickReply: QUICK_REPLY_CANCEL_CONFIRM }],
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+    );
+
+  if (event.message.type !== "text") {
+    await reConfirm();
+    return;
+  }
+
+  const text = event.message.text.trim();
+
+  if (text === CANCEL_CONFIRM_YES) {
+    await deleteSession(env.DB, session.lineUserId);
+    await replyMessage(
+      replyToken,
+      [{ type: "text", text: MSG_CANCELLED }],
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+    );
+    return;
+  }
+
+  if (text === CANCEL_CONFIRM_NO) {
+    const prevStep = session.data.previousStep;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { previousStep: _removed, ...dataWithoutPrev } = session.data;
+    const targetStep: ConversationStep = prevStep ?? "consent";
+
+    const restoredSession: ConversationSession = {
+      ...session,
+      step: targetStep,
+      data: dataWithoutPrev,
+      updatedAt: new Date().toISOString(),
+    };
+    await upsertSession(env.DB, restoredSession);
+
+    const resume = prevStep ? getStepResumeMessage(prevStep, dataWithoutPrev) : null;
+    if (resume) {
+      const msgObj: Record<string, unknown> = { type: "text", text: resume.text };
+      if (resume.quickReply) msgObj.quickReply = resume.quickReply;
+      await replyMessage(replyToken, [msgObj], env.LINE_CHANNEL_ACCESS_TOKEN);
+    } else {
+      // previousStep が不明な場合は consent へフォールバック
+      await replyMessage(
+        replyToken,
+        [{ type: "text", text: MSG_REQUEST_CONSENT, quickReply: QUICK_REPLY_CONSENT }],
+        env.LINE_CHANNEL_ACCESS_TOKEN,
+      );
+    }
+    return;
+  }
+
+  // その他 → 再案内
+  await reConfirm();
 }
 
 // ---- ユーティリティ ----------------------------------------------------------

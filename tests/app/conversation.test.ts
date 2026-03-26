@@ -883,3 +883,147 @@ describe("completed ステップ", () => {
     expect((messages[0] as { text: string }).text).toContain("受け付け済み");
   });
 });
+
+// ---- キャンセル確認フロー（cancelling ステップ） ---------------------------------
+
+describe("「通報を中止する」→ cancelling ステップへ遷移", () => {
+  it("close_photo ステップで「通報を中止する」→ cancelling に遷移 + 確認メッセージ", async () => {
+    mockGetSession.mockResolvedValue(makeClosePhotoSession());
+
+    await handleConversationMessage(makeTextEvent("通報を中止する"), USER_ID, mockEnv);
+
+    // セッションが cancelling に更新される
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, updated] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
+    expect(updated.step).toBe("cancelling");
+    expect(updated.data.previousStep).toBe("close_photo");
+
+    // 即時 deleteSession は呼ばれない
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+
+    // 確認メッセージ（Quick Reply 付き）
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    const msg = messages[0] as { text: string; quickReply?: { items: unknown[] } };
+    expect(msg.text).toContain("中止してよろしいですか");
+    expect(msg.quickReply).toBeDefined();
+    expect(msg.quickReply?.items).toHaveLength(2);
+  });
+
+  it("confirming ステップで「通報を中止する」→ cancelling に遷移 + 確認メッセージ", async () => {
+    mockGetSession.mockResolvedValue(makeOptionalStepSession("confirming"));
+
+    await handleConversationMessage(makeTextEvent("通報を中止する"), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, updated] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
+    expect(updated.step).toBe("cancelling");
+    expect(updated.data.previousStep).toBe("confirming");
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+  });
+
+  it("remarks ステップで「通報を中止する」→ cancelling に遷移", async () => {
+    mockGetSession.mockResolvedValue(makeOptionalStepSession("remarks"));
+
+    await handleConversationMessage(makeTextEvent("通報を中止する"), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, updated] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
+    expect(updated.step).toBe("cancelling");
+    expect(updated.data.previousStep).toBe("remarks");
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelling ステップ", () => {
+  function makeCancellingSession(prevStep: ConversationSession["step"]): ConversationSession {
+    return {
+      lineUserId: USER_ID,
+      step: "cancelling",
+      data: {
+        reportUuid: "cancel-test-uuid",
+        closePhotoKey: "reports/20260326/cancel-test-uuid/close.jpg",
+        farPhotoKey: "reports/20260326/cancel-test-uuid/far.jpg",
+        latitude: 33.5057,
+        longitude: 132.5595,
+        previousStep: prevStep,
+      },
+      createdAt: "2026-03-26T00:00:00.000Z",
+      updatedAt: "2026-03-26T00:00:00.000Z",
+    };
+  }
+
+  beforeEach(() => {
+    mockGetSession.mockResolvedValue(makeCancellingSession("remarks"));
+  });
+
+  it("「はい、中止します」→ deleteSession + キャンセルメッセージ", async () => {
+    await handleConversationMessage(makeTextEvent("はい、中止します"), USER_ID, mockEnv);
+
+    expect(mockDeleteSession).toHaveBeenCalledWith(mockEnv.DB, USER_ID);
+    expect(mockUpsertSession).not.toHaveBeenCalled();
+
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("中止しました");
+  });
+
+  it("「いいえ、続けます」→ セッションを previousStep に戻す + 再案内メッセージ", async () => {
+    await handleConversationMessage(makeTextEvent("いいえ、続けます"), USER_ID, mockEnv);
+
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+
+    // セッションが remarks に戻る
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, restored] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
+    expect(restored.step).toBe("remarks");
+    // previousStep がデータから除去される
+    expect(restored.data.previousStep).toBeUndefined();
+
+    // 再案内メッセージ（Quick Reply 付き）
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toBeTruthy();
+    expect(msg.quickReply).toBeDefined();
+  });
+
+  it("「いいえ、続けます」→ close_photo ステップへの復帰でも Quick Reply あり", async () => {
+    mockGetSession.mockResolvedValue(makeCancellingSession("close_photo"));
+
+    await handleConversationMessage(makeTextEvent("いいえ、続けます"), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, restored] = mockUpsertSession.mock.calls[0] as [D1Database, ConversationSession];
+    expect(restored.step).toBe("close_photo");
+
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("写真");
+    expect(msg.quickReply).toBeDefined();
+  });
+
+  it("その他のテキスト → 確認メッセージ再案内（セッション変更なし）", async () => {
+    await handleConversationMessage(makeTextEvent("どちらでもない"), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).not.toHaveBeenCalled();
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("中止してよろしいですか");
+    expect(msg.quickReply).toBeDefined();
+  });
+
+  it("テキスト以外（画像）→ 確認メッセージ再案内（セッション変更なし）", async () => {
+    await handleConversationMessage(makeImageEvent(), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).not.toHaveBeenCalled();
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    const msg = messages[0] as { text: string; quickReply?: unknown };
+    expect(msg.text).toContain("中止してよろしいですか");
+    expect(msg.quickReply).toBeDefined();
+  });
+});

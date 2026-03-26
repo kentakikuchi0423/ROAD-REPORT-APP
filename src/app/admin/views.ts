@@ -20,12 +20,16 @@ const STATUS_LABELS: Record<ReportStatus, string> = {
   rejected: "対応不要",
 };
 
-const STATUS_COLORS: Record<ReportStatus, string> = {
-  pending: "#6c757d",
-  in_progress: "#0d6efd",
-  resolved: "#198754",
-  rejected: "#fd7e14",
+/** ステータスバッジに付与する CSS クラス名（badge badge--STATUS） */
+const STATUS_BADGE_CLASSES: Record<ReportStatus, string> = {
+  pending: "badge badge--pending",
+  in_progress: "badge badge--in_progress",
+  resolved: "badge badge--resolved",
+  rejected: "badge badge--rejected",
 };
+
+/** 対応完了・不要の終了系ステータス（一覧行を淡色表示するために使用） */
+const CLOSED_STATUSES = new Set<ReportStatus>(["resolved", "rejected"]);
 
 // ---- 小ヘルパー -------------------------------------------------------------
 
@@ -58,17 +62,21 @@ function formatJst(iso: string): string {
 /** ステータスバッジ HTML を返す */
 function renderStatusBadge(status: ReportStatus): string {
   const label = STATUS_LABELS[status];
-  const color = STATUS_COLORS[status];
-  return `<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:${color};color:#fff;font-size:0.82rem;white-space:nowrap">${label}</span>`;
+  const cls = STATUS_BADGE_CLASSES[status];
+  return `<span class="${cls}">${label}</span>`;
 }
 
-// ステータス変更 JS で共通利用するラベル・カラー定義（JSON として埋め込む）
+// ステータス変更 JS で共通利用するラベル・クラス定義（JSON として埋め込む）
 const STATUS_LABELS_JSON = JSON.stringify(STATUS_LABELS);
-const STATUS_COLORS_JSON = JSON.stringify(STATUS_COLORS);
+const STATUS_BADGE_CLASSES_JSON = JSON.stringify(STATUS_BADGE_CLASSES);
 
 // ---- 共通レイアウト ---------------------------------------------------------
 
 const COMMON_CSS = `
+  :root {
+    --color-brand: #2a6496;
+    --color-brand-dark: #1a4066;
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
     max-width: 1100px;
@@ -77,10 +85,10 @@ const COMMON_CSS = `
     color: #333;
     line-height: 1.7;
   }
-  h1 { font-size: 1.4rem; border-bottom: 2px solid #2a6496; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+  h1 { font-size: 1.4rem; border-bottom: 2px solid var(--color-brand); padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
   h2 { font-size: 1.1rem; margin-top: 1.5rem; }
-  a { color: #2a6496; }
-  a:hover { color: #1a4066; }
+  a { color: var(--color-brand); }
+  a:hover { color: var(--color-brand-dark); }
   .nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
   .note {
     background: #fff3cd;
@@ -93,41 +101,51 @@ const COMMON_CSS = `
   th, td { border: 1px solid #dee2e6; padding: 0.5rem 0.75rem; text-align: left; vertical-align: middle; }
   th { background: #f1f3f5; white-space: nowrap; }
   tr:hover td { background: #f8f9fa; }
+  tr.row--closed td { color: #999; }
+  tr.row--closed td a { color: #999; }
   .muted { color: #999; font-style: italic; }
   .filter-form { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
   .filter-form select, .filter-form button { padding: 0.35rem 0.65rem; font-size: 0.88rem; border: 1px solid #ced4da; border-radius: 4px; }
-  .filter-form button { background: #2a6496; color: #fff; cursor: pointer; border-color: #2a6496; }
-  .filter-form button:hover { background: #1a4066; }
+  .filter-form button { background: var(--color-brand); color: #fff; cursor: pointer; border-color: var(--color-brand); }
+  .filter-form button:hover { background: var(--color-brand-dark); }
   .pagination { display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem; font-size: 0.9rem; }
-  .pagination a, .pagination span { padding: 4px 12px; border: 1px solid #ced4da; border-radius: 4px; text-decoration: none; color: #2a6496; }
+  .pagination a, .pagination span { padding: 4px 12px; border: 1px solid #ced4da; border-radius: 4px; text-decoration: none; color: var(--color-brand); }
   .pagination span { color: #999; cursor: default; }
-  .pagination .current { background: #2a6496; color: #fff; border-color: #2a6496; }
+  .pagination .current { background: var(--color-brand); color: #fff; border-color: var(--color-brand); }
+  /* ステータスバッジ */
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 0.82rem; white-space: nowrap; font-weight: 600; }
+  .badge--pending   { background: #fff3cd; color: #664d03; border: 1px solid #ffda6a; }
+  .badge--in_progress { background: var(--color-brand); color: #fff; border: 1px solid var(--color-brand); }
+  .badge--resolved  { background: #198754; color: #fff; border: 1px solid #198754; }
+  .badge--rejected  { background: #adb5bd; color: #fff; border: 1px solid #adb5bd; }
   /* 一覧: インラインステータス変更 */
   .inline-status-form { display: flex; gap: 0.3rem; align-items: center; }
   .inline-status-form select { padding: 0.2rem 0.4rem; font-size: 0.8rem; border: 1px solid #ced4da; border-radius: 3px; }
-  .inline-status-form button { padding: 0.2rem 0.55rem; font-size: 0.8rem; background: #2a6496; color: #fff; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
-  .inline-status-form button:hover { background: #1a4066; }
+  .inline-status-form button { padding: 0.2rem 0.55rem; font-size: 0.8rem; background: var(--color-brand); color: #fff; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
+  .inline-status-form button:hover { background: var(--color-brand-dark); }
   /* 詳細: 共通レイアウト */
   dl { display: grid; grid-template-columns: 180px 1fr; gap: 0.5rem 1rem; margin: 0; }
   dt { font-weight: bold; color: #555; }
   dd { margin: 0; }
   .section { border: 1px solid #dee2e6; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
-  .section h2 { margin-top: 0; border-bottom: 1px solid #dee2e6; padding-bottom: 0.4rem; }
+  .section h2 { margin-top: 0; border-bottom: 1px solid #dee2e6; padding-bottom: 0.4rem; padding-left: 0.5rem; border-left: 3px solid var(--color-brand); }
   .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .photo-placeholder { border: 2px dashed #ccc; background: #f8f9fa; padding: 1.5rem; text-align: center; border-radius: 4px; min-height: 140px; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; }
-  .photo-placeholder .photo-label { font-weight: bold; margin: 0; }
-  .photo-placeholder .photo-key { font-family: monospace; font-size: 0.78rem; color: #666; word-break: break-all; margin: 0; }
-  .photo-download-link { display: inline-block; margin-top: 0.5rem; padding: 0.3rem 0.8rem; font-size: 0.82rem; background: #2a6496; color: #fff; border-radius: 4px; text-decoration: none; }
-  .photo-download-link:hover { background: #1a4066; color: #fff; }
+  .photo-card { border: 1px solid #dee2e6; background: #f8f9fa; padding: 0.75rem; text-align: center; border-radius: 6px; display: flex; flex-direction: column; gap: 0.5rem; }
+  .photo-card .photo-label { font-weight: bold; margin: 0; font-size: 0.9rem; color: #555; }
+  .photo-thumb { width: 100%; height: 200px; object-fit: cover; border-radius: 4px; border: 1px solid #dee2e6; cursor: pointer; transition: opacity 0.15s; display: block; }
+  .photo-thumb:hover { opacity: 0.88; }
+  .photo-preview-link { display: block; }
+  .photo-download-link { display: inline-block; padding: 0.3rem 0.8rem; font-size: 0.82rem; background: var(--color-brand); color: #fff; border-radius: 4px; text-decoration: none; }
+  .photo-download-link:hover { background: var(--color-brand-dark); color: #fff; }
   .danger-section { border-color: #dc3545; }
-  .danger-section h2 { color: #dc3545; }
+  .danger-section h2 { color: #dc3545; border-left-color: #dc3545; }
   .danger-btn { padding: 0.45rem 1.2rem; font-size: 0.9rem; background: #fff; color: #dc3545; border: 1px solid #dc3545; border-radius: 4px; cursor: pointer; }
   .danger-btn:hover { background: #dc3545; color: #fff; }
   /* 詳細: ステータス更新 */
   .status-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
   .status-form select { padding: 0.4rem 0.6rem; font-size: 0.9rem; border: 1px solid #ced4da; border-radius: 4px; }
-  .status-form button { padding: 0.4rem 1.2rem; font-size: 0.9rem; background: #2a6496; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-  .status-form button:hover { background: #1a4066; }
+  .status-form button { padding: 0.4rem 1.2rem; font-size: 0.9rem; background: var(--color-brand); color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+  .status-form button:hover { background: var(--color-brand-dark); }
   .status-msg { font-size: 0.88rem; color: #198754; margin-left: 0.5rem; }
   .back-link { margin-bottom: 1rem; display: inline-block; font-size: 0.9rem; }
 `;
@@ -251,7 +269,8 @@ export function renderReportList(
             const name = r.reporterName
               ? escapeHtml(r.reporterName)
               : `<span class="muted">匿名</span>`;
-            return `<tr>
+            const rowClass = CLOSED_STATUSES.has(r.status) ? ' class="row--closed"' : '';
+            return `<tr${rowClass}>
           <td><a href="/admin/reports/${r.id}">${escapeHtml(r.receiptNumber)}</a></td>
           <td style="white-space:nowrap">${formatJst(r.createdAt)}</td>
           <td class="status-badge-cell">${renderStatusBadge(r.status)}</td>
@@ -294,11 +313,11 @@ export function renderReportList(
 <script>
 (function() {
   var STATUS_LABELS = ${STATUS_LABELS_JSON};
-  var STATUS_COLORS = ${STATUS_COLORS_JSON};
+  var STATUS_BADGE_CLASSES = ${STATUS_BADGE_CLASSES_JSON};
   function makeBadge(status) {
     var label = STATUS_LABELS[status] || status;
-    var color = STATUS_COLORS[status] || '#333';
-    return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:' + color + ';color:#fff;font-size:0.82rem;white-space:nowrap">' + label + '</span>';
+    var cls = STATUS_BADGE_CLASSES[status] || 'badge';
+    return '<span class="' + cls + '">' + label + '</span>';
   }
   document.querySelectorAll('.inline-status-form').forEach(function(form) {
     form.addEventListener('submit', function(e) {
@@ -373,11 +392,11 @@ export function renderReportDetail(report: Report): string {
 <script>
 (function() {
   var STATUS_LABELS = ${STATUS_LABELS_JSON};
-  var STATUS_COLORS = ${STATUS_COLORS_JSON};
+  var STATUS_BADGE_CLASSES = ${STATUS_BADGE_CLASSES_JSON};
   function makeBadge(status) {
     var label = STATUS_LABELS[status] || status;
-    var color = STATUS_COLORS[status] || '#333';
-    return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:' + color + ';color:#fff;font-size:0.82rem;white-space:nowrap">' + label + '</span>';
+    var cls = STATUS_BADGE_CLASSES[status] || 'badge';
+    return '<span class="' + cls + '">' + label + '</span>';
   }
   var form = document.getElementById('status-form');
   if (!form) return;
@@ -460,15 +479,19 @@ export function renderReportDetail(report: Report): string {
   <div class="section">
     <h2>写真</h2>
     <div class="photo-grid">
-      <div class="photo-placeholder">
+      <div class="photo-card">
         <p class="photo-label">近景写真</p>
-        <p class="photo-key">${escapeHtml(report.closePhotoKey)}</p>
-        <a class="photo-download-link" href="/admin/reports/${report.id}/images/close" download>近景写真をダウンロード</a>
+        <a href="/admin/reports/${report.id}/images/close" target="_blank" rel="noopener" class="photo-preview-link">
+          <img src="/admin/reports/${report.id}/images/close" alt="近景写真" class="photo-thumb" loading="lazy">
+        </a>
+        <a class="photo-download-link" href="/admin/reports/${report.id}/images/close?dl=1" download="${escapeHtml(`close_${report.receiptNumber}.jpg`)}">ダウンロード</a>
       </div>
-      <div class="photo-placeholder">
+      <div class="photo-card">
         <p class="photo-label">遠景写真</p>
-        <p class="photo-key">${escapeHtml(report.farPhotoKey)}</p>
-        <a class="photo-download-link" href="/admin/reports/${report.id}/images/far" download>遠景写真をダウンロード</a>
+        <a href="/admin/reports/${report.id}/images/far" target="_blank" rel="noopener" class="photo-preview-link">
+          <img src="/admin/reports/${report.id}/images/far" alt="遠景写真" class="photo-thumb" loading="lazy">
+        </a>
+        <a class="photo-download-link" href="/admin/reports/${report.id}/images/far?dl=1" download="${escapeHtml(`far_${report.receiptNumber}.jpg`)}">ダウンロード</a>
       </div>
     </div>
   </div>

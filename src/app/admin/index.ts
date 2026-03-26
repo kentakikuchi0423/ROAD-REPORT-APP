@@ -222,11 +222,12 @@ export async function handleAdmin(
           return await handleReportDetail(env, id);
         }
 
-        // GET /admin/reports/:id/images/:type
+        // GET /admin/reports/:id/images/:type[?dl=1]
         if (method === "GET" && segments.length === 6 && segments[4] === "images") {
           const imgType = segments[5];
           if (imgType === "close" || imgType === "far") {
-            return await handleImageDownload(env, id, imgType);
+            const download = searchParams.has("dl");
+            return await handleImageDownload(env, id, imgType, download);
           }
         }
 
@@ -327,6 +328,7 @@ async function handleImageDownload(
   env: Env,
   id: number,
   type: "close" | "far",
+  download: boolean,
 ): Promise<Response> {
   const report = await getReportById(env.DB, id);
   if (!report) {
@@ -343,10 +345,14 @@ async function handleImageDownload(
   }
 
   const filename = `${type}_${report.receiptNumber}.jpg`;
+  const disposition = download
+    ? `attachment; filename="${filename}"`
+    : `inline; filename="${filename}"`;
   return new Response(obj.body, {
     headers: {
       "Content-Type": obj.httpMetadata?.contentType ?? "image/jpeg",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": disposition,
+      "Cache-Control": "private, max-age=300",
     },
   });
 }

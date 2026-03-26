@@ -55,6 +55,7 @@ export type ConversationStep =
   | "reporter_name" // 氏名（任意）
   | "reporter_phone" // 電話番号（任意）
   | "confirming" // 確認中（送信する／やり直す を待つ）。「やり直す」は consent ステップへ戻る
+  | "cancelling" // キャンセル確認中（「はい、中止します」「いいえ、続けます」を待つ）
   | "completed" // 完了
   | "cancelled"; // キャンセル済み
 
@@ -73,6 +74,7 @@ export interface ConversationSession {
     remarks: string;
     reporterName: string;
     reporterPhone: string;
+    previousStep: ConversationStep; // cancelling ステップ中に元のステップを保持
   }>;
   createdAt: string;
   updatedAt: string;
