@@ -32,3 +32,13 @@ export async function downloadImage(
 ): Promise<R2ObjectBody | null> {
   return bucket.get(key);
 }
+
+/**
+ * R2 から画像を削除する。
+ *
+ * @param bucket R2 バケット
+ * @param key    削除するキー
+ */
+export async function deleteImage(bucket: R2Bucket, key: string): Promise<void> {
+  await bucket.delete(key);
+}

@@ -116,7 +116,12 @@ const COMMON_CSS = `
   .photo-placeholder { border: 2px dashed #ccc; background: #f8f9fa; padding: 1.5rem; text-align: center; border-radius: 4px; min-height: 140px; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; }
   .photo-placeholder .photo-label { font-weight: bold; margin: 0; }
   .photo-placeholder .photo-key { font-family: monospace; font-size: 0.78rem; color: #666; word-break: break-all; margin: 0; }
-  .photo-placeholder .photo-note { font-size: 0.82rem; color: #aaa; margin: 0; }
+  .photo-download-link { display: inline-block; margin-top: 0.5rem; padding: 0.3rem 0.8rem; font-size: 0.82rem; background: #2a6496; color: #fff; border-radius: 4px; text-decoration: none; }
+  .photo-download-link:hover { background: #1a4066; color: #fff; }
+  .danger-section { border-color: #dc3545; }
+  .danger-section h2 { color: #dc3545; }
+  .danger-btn { padding: 0.45rem 1.2rem; font-size: 0.9rem; background: #fff; color: #dc3545; border: 1px solid #dc3545; border-radius: 4px; cursor: pointer; }
+  .danger-btn:hover { background: #dc3545; color: #fff; }
   /* 詳細: ステータス更新 */
   .status-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
   .status-form select { padding: 0.4rem 0.6rem; font-size: 0.9rem; border: 1px solid #ced4da; border-radius: 4px; }
@@ -214,6 +219,9 @@ export function renderReportList(
   const totalPages = Math.max(1, Math.ceil(page.total / PAGE_SIZE));
 
   // フィルタフォーム
+  const csvHref = status
+    ? `/admin/reports/csv?status=${status}`
+    : "/admin/reports/csv";
   const filterForm = `
   <form class="filter-form" method="GET" action="/admin/reports">
     <label for="status-filter">ステータス:</label>
@@ -226,6 +234,7 @@ export function renderReportList(
     </select>
     <button type="submit">絞り込み</button>
     ${status ? `<a href="/admin/reports">リセット</a>` : ""}
+    <a href="${csvHref}" style="padding:0.35rem 0.65rem;font-size:0.88rem;border:1px solid #198754;border-radius:4px;color:#198754;text-decoration:none;white-space:nowrap">CSV出力</a>
     <span style="margin-left:auto;color:#666;font-size:0.88rem">${page.total} 件</span>
   </form>`;
 
@@ -453,16 +462,46 @@ export function renderReportDetail(report: Report): string {
       <div class="photo-placeholder">
         <p class="photo-label">近景写真</p>
         <p class="photo-key">${escapeHtml(report.closePhotoKey)}</p>
-        <p class="photo-note">※ 署名付き URL 実装後に表示予定</p>
+        <a class="photo-download-link" href="/admin/reports/${report.id}/images/close" download>近景写真をダウンロード</a>
       </div>
       <div class="photo-placeholder">
         <p class="photo-label">遠景写真</p>
         <p class="photo-key">${escapeHtml(report.farPhotoKey)}</p>
-        <p class="photo-note">※ 署名付き URL 実装後に表示予定</p>
+        <a class="photo-download-link" href="/admin/reports/${report.id}/images/far" download>遠景写真をダウンロード</a>
       </div>
     </div>
   </div>
+
+  <div class="section danger-section">
+    <h2>危険な操作</h2>
+    <p style="font-size:0.9rem;color:#666;margin-top:0">通報データと写真（R2）を削除します。この操作は取り消せません。</p>
+    <button id="delete-btn" class="danger-btn" type="button">この通報を削除する</button>
+  </div>
   ${statusUpdateScript}
+  <script>
+(function() {
+  var btn = document.getElementById('delete-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    if (!confirm('通報「${escapeHtml(report.receiptNumber)}」を削除しますか？\\nR2の写真も削除されます。この操作は取り消せません。')) return;
+    btn.disabled = true;
+    btn.textContent = '削除中...';
+    fetch('/admin/reports/${report.id}', { method: 'DELETE' })
+      .then(function(res) {
+        if (res.ok) {
+          location.href = '/admin/reports';
+        } else {
+          throw new Error('削除に失敗しました（' + res.status + '）');
+        }
+      })
+      .catch(function(err) {
+        alert(err.message);
+        btn.disabled = false;
+        btn.textContent = 'この通報を削除する';
+      });
+  });
+})();
+</script>
 `;
   return renderLayout(`通報詳細 ${report.receiptNumber}`, body);
 }

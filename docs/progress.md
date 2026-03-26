@@ -402,6 +402,37 @@ Cloudflare Workers 上に管理者向け Web UI を実装する（サーバー�
 
 ---
 
+## Step 10a: CSV出力・画像ダウンロード・削除機能 ✅（2026-03-26）
+
+管理画面の残機能（CSV・画像DL・削除）を実装した。
+
+- [x] `src/lib/r2.ts`: `deleteImage` 関数追加
+- [x] `src/lib/db.ts`: `getAllReports`（CSV用・ページネーションなし）/ `deleteReport` 関数追加
+- [x] `src/app/admin/index.ts`: 3ルート追加 + CSV生成ヘルパー関数
+  - `GET  /admin/reports/csv` — CSV出力（status フィルタ対応・UTF-8 BOM 付き・Excel 互換）
+  - `GET  /admin/reports/:id/images/:type` — 写真ダウンロード（type: close|far）
+  - `DELETE /admin/reports/:id` — 通報削除（R2画像 + DB行、全ルートに requireAuth 適用）
+- [x] `src/app/admin/views.ts`: UI更新
+  - 一覧フィルタフォームに「CSV出力」リンク追加（現在のステータスフィルタを引き継ぐ）
+  - 詳細ページ写真セクション: プレースホルダ → ダウンロードリンク（`<a download>`）
+  - 詳細ページ下部に「この通報を削除する」ボタン追加（確認ダイアログ + fetch DELETE）
+- [x] `tests/app/admin.test.ts`: 14テスト追加（計 47テスト）
+  - CSV: 200・BOMバイト確認・ヘッダー行・status フィルタ・未認証
+  - 画像DL: close/far 正常・R2 null → 404・通報なし → 404・未認証
+  - 削除: 302リダイレクト・deleteImage 両呼び出し確認・DB deleteReport 確認・404・未認証
+- [x] テスト全通過: 165 件（+14 件）
+
+### 採用判断メモ
+
+- CSV の UTF-8 BOM: `\uFEFF` → UTF-8 では EF BB BF の 3 バイト。Excel で開いたとき文字化けしない
+- CSV 列順: 受付番号・状態・受付日時・更新日時・住所・緯度・経度・撮影日付・補足事項・氏名・電話番号
+- ステータスは日本語訳して出力（pending→受付済み など）
+- `/admin/reports/csv` は `/admin/reports/:id` より先にルート判定（"csv" が parseInt で NaN になるため）
+- 削除時に R2 失敗しても DB 削除は続行（孤立 R2 キーは許容。逆よりマシ）
+- 削除確認は JavaScript `confirm()` ダイアログで実装（シンプル・追加ページ不要）
+
+---
+
 ## Step 10: テスト・品質保証
 
 単体テスト・結合テストを実施し、品質を担保する。

@@ -13,7 +13,8 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "d1:migrate:local": "wrangler d1 migrations apply ozu-road-report-db --local"
+    "d1:migrate:local": "wrangler d1 migrations apply ozu-road-report-db --local",
+    "seed:local": "node scripts/seed-local.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240909.0",

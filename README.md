@@ -46,7 +46,45 @@ npm run d1:migrate:local
 npx wrangler d1 migrations apply ozu-road-report-db --local
 ```
 
-### 4. 開発サーバーの起動
+### 4. ダミーデータの投入（任意）
+
+管理画面の動作確認に使うダミー通報データを追加できます。
+
+```bash
+npm run seed:local
+```
+
+実行するたびに**新しい通報 5 件**（ステータスが異なるもの）と**ダミー画像 10 枚**がローカル環境に追加されます。
+
+#### ダミーデータの仕様
+
+| 項目 | 内容 |
+|---|---|
+| 受付番号 | `OZU-{当日JST日付}-9XX`（900〜989 番台を連番採番） |
+| ステータス | `pending` / `in_progress` / `resolved` / `rejected` の 4 種類 |
+| 場所 | 大洲市内の各地区（大洲・長浜・肱川町・喜多町・冨士町） |
+| 画像 | 120×80px の PNG（近景: 青灰色、遠景: 灰緑色） |
+
+#### 繰り返し実行について
+
+- **何度でも実行可能**：実行ごとに一意な受付番号・R2 キーを生成するため、UNIQUE 制約違反は発生しない
+- **上限**：同日に 18 回（90 件）実行すると採番枠が尽きてエラーになる → 翌日に実行するか DB をリセットする
+- **本番への影響なし**：すべての wrangler コマンドに `--local` を付与しているため、本番環境には書き込まない
+
+#### ローカル DB をリセットしたい場合
+
+```bash
+# SQLite ファイルを削除
+rm .wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite*
+
+# migration を再適用
+npm run d1:migrate:local
+
+# 必要に応じてダミーデータを再投入
+npm run seed:local
+```
+
+### 5. 開発サーバーの起動
 
 ```bash
 npm run dev

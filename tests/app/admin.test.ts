@@ -2,23 +2,29 @@
  * 管理画面ハンドラテスト（tests/app/admin.test.ts）
  *
  * handleAdmin の各ルート・エラーケースを検証する。
- * DB 関数（getReports / getReportById / updateReportStatus）は vi.mock でモックする。
+ * DB 関数・R2 関数は vi.mock でモックする。
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleAdmin } from "../../src/app/admin/index";
 import { createSessionToken, SESSION_COOKIE_NAME, hashPassword } from "../../src/app/admin/auth";
 import * as db from "../../src/lib/db";
+import * as r2 from "../../src/lib/r2";
 import type { Env, Report } from "../../src/types";
 import type { ReportsPage } from "../../src/lib/db";
 
 // ---- モック設定 -------------------------------------------------------------
 
 vi.mock("../../src/lib/db");
+vi.mock("../../src/lib/r2");
 
 const mockGetReports = vi.mocked(db.getReports);
+const mockGetAllReports = vi.mocked(db.getAllReports);
 const mockGetReportById = vi.mocked(db.getReportById);
 const mockUpdateReportStatus = vi.mocked(db.updateReportStatus);
+const mockDeleteReport = vi.mocked(db.deleteReport);
+const mockDownloadImage = vi.mocked(r2.downloadImage);
+const mockDeleteImage = vi.mocked(r2.deleteImage);
 
 // ---- テスト用定数 ------------------------------------------------------------
 
@@ -459,6 +465,191 @@ describe("handleAdmin", () => {
       const res = await handleAdmin(req, mockEnv, mockCtx);
 
       expect(res.status).toBe(400);
+    });
+  });
+
+  // ---- GET /admin/reports/csv -----------------------------------------------
+
+  describe("GET /admin/reports/csv", () => {
+    it("200 + text/csv + BOM（UTF-8）+ ヘッダー行を返す", async () => {
+      mockGetAllReports.mockResolvedValue([sampleReport]);
+
+      const req = await makeAuthRequest("GET", "/admin/reports/csv");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toMatch(/text\/csv/);
+      expect(res.headers.get("content-disposition")).toMatch(/attachment/);
+
+      // UTF-8 BOM は EF BB BF の 3 バイト
+      const buf = await res.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      expect(bytes[0]).toBe(0xef);
+      expect(bytes[1]).toBe(0xbb);
+      expect(bytes[2]).toBe(0xbf);
+
+      const text = new TextDecoder("utf-8").decode(buf);
+      expect(text).toContain("受付番号");
+      expect(text).toContain("OZU-20260325-001");
+      expect(text).toContain("受付済み");
+    });
+
+    it("?status=pending で getAllReports に status が渡される", async () => {
+      mockGetAllReports.mockResolvedValue([]);
+
+      const req = await makeAuthRequest("GET", "/admin/reports/csv?status=pending");
+      await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(mockGetAllReports).toHaveBeenCalledWith(mockEnv.DB, "pending");
+    });
+
+    it("?status=unknown（不正値）は status=undefined で呼ばれる", async () => {
+      mockGetAllReports.mockResolvedValue([]);
+
+      const req = await makeAuthRequest("GET", "/admin/reports/csv?status=unknown");
+      await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(mockGetAllReports).toHaveBeenCalledWith(mockEnv.DB, undefined);
+    });
+
+    it("未認証は /admin/login へリダイレクト", async () => {
+      const req = makeRequest("GET", "/admin/reports/csv");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain("/admin/login");
+    });
+  });
+
+  // ---- GET /admin/reports/:id/images/:type ----------------------------------
+
+  describe("GET /admin/reports/:id/images/:type", () => {
+    const mockR2Body = new ReadableStream();
+
+    it("close 画像が存在する場合 200 + image/jpeg を返す", async () => {
+      mockGetReportById.mockResolvedValue(sampleReport);
+      mockDownloadImage.mockResolvedValue({
+        body: mockR2Body,
+        httpMetadata: { contentType: "image/jpeg" },
+      } as unknown as R2ObjectBody);
+
+      const req = await makeAuthRequest("GET", "/admin/reports/1/images/close");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toBe("image/jpeg");
+      expect(res.headers.get("content-disposition")).toMatch(/attachment/);
+      expect(mockDownloadImage).toHaveBeenCalledWith(
+        mockEnv.IMAGES,
+        sampleReport.closePhotoKey,
+      );
+    });
+
+    it("far 画像が存在する場合 200 を返し farPhotoKey が使われる", async () => {
+      mockGetReportById.mockResolvedValue(sampleReport);
+      mockDownloadImage.mockResolvedValue({
+        body: mockR2Body,
+        httpMetadata: { contentType: "image/jpeg" },
+      } as unknown as R2ObjectBody);
+
+      const req = await makeAuthRequest("GET", "/admin/reports/1/images/far");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(200);
+      expect(mockDownloadImage).toHaveBeenCalledWith(
+        mockEnv.IMAGES,
+        sampleReport.farPhotoKey,
+      );
+    });
+
+    it("R2 に画像が存在しない場合 404 を返す", async () => {
+      mockGetReportById.mockResolvedValue(sampleReport);
+      mockDownloadImage.mockResolvedValue(null);
+
+      const req = await makeAuthRequest("GET", "/admin/reports/1/images/close");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(404);
+    });
+
+    it("通報が存在しない場合 404 を返す", async () => {
+      mockGetReportById.mockResolvedValue(null);
+
+      const req = await makeAuthRequest("GET", "/admin/reports/999/images/close");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(404);
+      expect(mockDownloadImage).not.toHaveBeenCalled();
+    });
+
+    it("未認証は /admin/login へリダイレクト", async () => {
+      const req = makeRequest("GET", "/admin/reports/1/images/close");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain("/admin/login");
+    });
+  });
+
+  // ---- DELETE /admin/reports/:id --------------------------------------------
+
+  describe("DELETE /admin/reports/:id", () => {
+    it("通報が存在する場合 204 を返す", async () => {
+      mockGetReportById.mockResolvedValue(sampleReport);
+      mockDeleteImage.mockResolvedValue(undefined);
+      mockDeleteReport.mockResolvedValue(true);
+
+      const req = await makeAuthRequest("DELETE", "/admin/reports/1");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(204);
+    });
+
+    it("R2 画像削除（close・far 両方）が呼ばれる", async () => {
+      mockGetReportById.mockResolvedValue(sampleReport);
+      mockDeleteImage.mockResolvedValue(undefined);
+      mockDeleteReport.mockResolvedValue(true);
+
+      const req = await makeAuthRequest("DELETE", "/admin/reports/1");
+      await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(mockDeleteImage).toHaveBeenCalledWith(
+        mockEnv.IMAGES,
+        sampleReport.closePhotoKey,
+      );
+      expect(mockDeleteImage).toHaveBeenCalledWith(
+        mockEnv.IMAGES,
+        sampleReport.farPhotoKey,
+      );
+    });
+
+    it("DB の deleteReport が呼ばれる", async () => {
+      mockGetReportById.mockResolvedValue(sampleReport);
+      mockDeleteImage.mockResolvedValue(undefined);
+      mockDeleteReport.mockResolvedValue(true);
+
+      const req = await makeAuthRequest("DELETE", "/admin/reports/1");
+      await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(mockDeleteReport).toHaveBeenCalledWith(mockEnv.DB, 1);
+    });
+
+    it("通報が存在しない場合 404 + deleteReport は呼ばれない", async () => {
+      mockGetReportById.mockResolvedValue(null);
+
+      const req = await makeAuthRequest("DELETE", "/admin/reports/999");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(404);
+      expect(mockDeleteReport).not.toHaveBeenCalled();
+    });
+
+    it("未認証は /admin/login へリダイレクト", async () => {
+      const req = makeRequest("DELETE", "/admin/reports/1");
+      const res = await handleAdmin(req, mockEnv, mockCtx);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain("/admin/login");
     });
   });
 

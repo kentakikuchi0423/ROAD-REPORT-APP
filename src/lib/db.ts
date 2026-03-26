@@ -295,6 +295,39 @@ export async function getReportById(
 }
 
 /**
+ * 通報を全件取得する（CSV エクスポート用・ページネーションなし）。
+ * status を指定するとフィルタリングする。
+ */
+export async function getAllReports(
+  db: D1Database,
+  status?: ReportStatus,
+): Promise<Report[]> {
+  if (status !== undefined) {
+    const rows = await db
+      .prepare("SELECT * FROM reports WHERE status = ? ORDER BY created_at DESC")
+      .bind(status)
+      .all<ReportRow>();
+    return rows.results.map(rowToReport);
+  }
+
+  const rows = await db
+    .prepare("SELECT * FROM reports ORDER BY created_at DESC")
+    .all<ReportRow>();
+  return rows.results.map(rowToReport);
+}
+
+/**
+ * 通報を削除する。削除できた場合は true、対象なしの場合は false を返す。
+ */
+export async function deleteReport(db: D1Database, id: number): Promise<boolean> {
+  const result = await db
+    .prepare("DELETE FROM reports WHERE id = ?")
+    .bind(id)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+/**
  * ステータスを更新し、更新後レコードを返す。id 不一致時は null を返す。
  */
 export async function updateReportStatus(
