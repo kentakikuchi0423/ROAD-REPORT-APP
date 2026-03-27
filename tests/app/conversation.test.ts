@@ -4,7 +4,13 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleConversationMessage } from "../../src/app/conversation";
-import { getSession, upsertSession, deleteSession, insertReport } from "../../src/lib/db";
+import {
+  getSession,
+  upsertSession,
+  deleteSession,
+  insertReport,
+  countPendingReportsByUser,
+} from "../../src/lib/db";
 import { replyMessage, getMessageContent } from "../../src/lib/line";
 import { uploadImage } from "../../src/lib/r2";
 import type { ConversationSession, Env, Report } from "../../src/types";
@@ -17,6 +23,7 @@ vi.mock("../../src/lib/db", () => ({
   upsertSession: vi.fn(),
   deleteSession: vi.fn(),
   insertReport: vi.fn(),
+  countPendingReportsByUser: vi.fn(),
 }));
 
 vi.mock("../../src/lib/line", () => ({
@@ -38,6 +45,7 @@ const mockGetSession = vi.mocked(getSession);
 const mockUpsertSession = vi.mocked(upsertSession);
 const mockDeleteSession = vi.mocked(deleteSession);
 const mockInsertReport = vi.mocked(insertReport);
+const mockCountPendingReportsByUser = vi.mocked(countPendingReportsByUser);
 const mockReplyMessage = vi.mocked(replyMessage);
 const mockGetMessageContent = vi.mocked(getMessageContent);
 const mockUploadImage = vi.mocked(uploadImage);
@@ -254,6 +262,7 @@ beforeEach(() => {
   mockUpsertSession.mockResolvedValue(undefined);
   mockDeleteSession.mockResolvedValue(undefined);
   mockInsertReport.mockResolvedValue(MOCK_REPORT);
+  mockCountPendingReportsByUser.mockResolvedValue(0); // デフォルト: 上限未達
   mockReplyMessage.mockResolvedValue(undefined);
   mockUploadImage.mockResolvedValue("uploaded-key");
   mockGetMessageContent.mockResolvedValue({
@@ -282,6 +291,36 @@ describe("セッションなし", () => {
     const msg = messages[0] as { text: string; quickReply?: unknown };
     expect(msg.text).toContain("同意する");
     expect(msg.quickReply).toBeDefined();
+  });
+
+  it("pending 件数が上限未満（9件）→ 通常通りフロー開始", async () => {
+    mockCountPendingReportsByUser.mockResolvedValue(9);
+    await handleConversationMessage(makeTextEvent("通報する"), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("同意する");
+  });
+
+  it("pending 件数がちょうど上限（10件）→ 通常通りフロー開始", async () => {
+    mockCountPendingReportsByUser.mockResolvedValue(10);
+    await handleConversationMessage(makeTextEvent("通報する"), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("同意する");
+  });
+
+  it("pending 件数が上限超過（11件）→ 上限超過メッセージを返しセッション作成しない", async () => {
+    mockCountPendingReportsByUser.mockResolvedValue(11);
+    await handleConversationMessage(makeTextEvent("通報する"), USER_ID, mockEnv);
+
+    expect(mockUpsertSession).not.toHaveBeenCalled();
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    const text = (messages[0] as { text: string }).text;
+    expect(text).toContain("上限に達している");
+    expect(text).toContain("大洲市へのお問い合わせはご遠慮ください");
   });
 
   it("「通報する」前後の空白は許容する", async () => {

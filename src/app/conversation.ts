@@ -31,7 +31,13 @@
 
 import type { webhook } from "@line/bot-sdk";
 import type { ConversationSession, ConversationStep, Env } from "../types";
-import { getSession, upsertSession, insertReport, deleteSession } from "../lib/db";
+import {
+  getSession,
+  upsertSession,
+  insertReport,
+  deleteSession,
+  countPendingReportsByUser,
+} from "../lib/db";
 import { replyMessage, getMessageContent } from "../lib/line";
 import { uploadImage } from "../lib/r2";
 import { createAdminNotifier } from "../lib/notification";
@@ -45,6 +51,18 @@ import {
 import { BRANDING } from "../lib/branding";
 
 // ---- メッセージ文言 ----------------------------------------------------------
+
+/** 1ユーザーあたりの pending 通報上限件数 */
+const REPORT_LIMIT_PER_USER = 10;
+
+/** 通報件数が上限に達している場合のメッセージ */
+const MSG_REPORT_LIMIT_EXCEEDED = [
+  "通報件数が上限に達しているため、これ以上の通報を受け付けることができません。",
+  "",
+  `通報が必要な場合は ${BRANDING.contactEmail} までご連絡ください。`,
+  "",
+  `※本アプリは『${BRANDING.developer}』が個人で開発したものです。大洲市の公式サービスではないため、大洲市へのお問い合わせはご遠慮ください。`,
+].join("\n");
 
 const MSG_HOW_TO_START =
   "大洲市の道路破損通報アプリへようこそ。\n通報を開始するには「通報する」と送信してください。";
@@ -458,6 +476,16 @@ async function handleNoSession(
     event.message.text.trim() === "通報する";
 
   if (isStartTrigger) {
+    const pendingCount = await countPendingReportsByUser(env.DB, userId);
+    if (pendingCount > REPORT_LIMIT_PER_USER) {
+      await replyMessage(
+        replyToken,
+        [{ type: "text", text: MSG_REPORT_LIMIT_EXCEEDED }],
+        env.LINE_CHANNEL_ACCESS_TOKEN,
+      );
+      return;
+    }
+
     const now = new Date().toISOString();
     const session: ConversationSession = {
       lineUserId: userId,

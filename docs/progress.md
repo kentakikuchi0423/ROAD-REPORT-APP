@@ -894,3 +894,86 @@ LINE キャンセル確認フロー・管理画面 UI 統一・写真プレビ�
 ### 次のステップ
 
 本番環境デプロイ（Step 11 本体：`wrangler deploy` / D1 migration / R2 bucket 作成 / シークレット登録）
+
+---
+
+## Step 13: 本番 Cloudflare 設定・デプロイドキュメント整備 ✅（2026-03-27）
+
+コードを変更せず、設定・docs・checklist を本番デプロイ向けに整理した。
+
+### 実施内容
+
+- [x] `wrangler.toml` に本番デプロイ方針コメントを追記
+  - デプロイ順序（D1 作成 → migration → R2 → secret → deploy）をファイル内に明記
+  - `database_id` の上書き必須であることを強調
+  - `[env.production]` / `[env.staging]` に「現時点未使用・将来拡張用」を明記
+  - named env での `[[d1_databases]]` 再宣言が必要な旨をコメントに追記
+- [x] `docs/checklist.md` を全面刷新
+  - セクション番号欠番（4→6）を修正し 0〜10 の連番に統一
+  - 実行順序を明確化：`wrangler login` → D1 作成 → migration → R2 → secret put → deploy
+  - D1 作成後に `wrangler.toml` の `database_id` を手動で書き換えるステップを明示
+  - secret 一覧テーブルを追加（必須/任意・値の取得方法）
+  - deploy コマンドに「なぜ `--env production` を使わないか」の説明を追加
+  - テスト件数を 194 件 → 205 件に更新
+  - 末尾に全コマンドをまとめた「手順まとめ」セクションを追加
+
+### `env.production` 不使用の判断理由
+
+`[env.production]` セクションは `name = "ozu-road-report-prod"` のみ定義されており、
+D1/R2 バインディングや secrets は top-level から引き継がれる（ただし `[[d1_databases]]` は
+named env での再宣言が必要なため引き継ぎが不完全）。
+ステージング環境を別途用意する予定がないため、`wrangler deploy`（フラグなし）で
+top-level 設定をそのまま本番に使用する方針を確定。
+`[env.production]` / `[env.staging]` は将来の拡張用として定義のみ残す。
+
+### 変更ファイル
+
+| ファイル | 種別 |
+|---|---|
+| `wrangler.toml` | 更新（コメント追記のみ、設定値変更なし） |
+| `docs/checklist.md` | 全面刷新 |
+| `docs/progress.md` | 本ステップ追記 |
+
+### 次のステップ
+
+手動でコマンドを実行して本番デプロイする（`docs/checklist.md` の手順に従う）。
+
+---
+
+## Step 14: ユーザー通報件数上限チェック実装 ✅（2026-03-27）
+
+同一 LINE ユーザーの pending 通報が 10 件に達した場合、新規通報を受け付けない機能を追加した。
+
+### 実施内容
+
+- [x] `src/lib/db.ts`: `countPendingReportsByUser(db, lineUserId)` 関数を追加
+  - `SELECT COUNT(*) FROM reports WHERE line_user_id = ? AND status = 'pending'`
+  - 既存の `idx_reports_line_user_id` インデックスを活用（新 migration 不要）
+- [x] `src/app/conversation.ts`: 上限チェックを実装
+  - `REPORT_LIMIT_PER_USER = 10` 定数を追加
+  - `MSG_REPORT_LIMIT_EXCEEDED` エラーメッセージ定数を追加（BRANDING 参照）
+  - 「通報する」受信時（consent セッション作成前）に pending 件数をチェック
+  - 上限以上の場合はエラーメッセージを返しセッションを作成しない
+- [x] `tests/lib/db.test.ts`: `countPendingReportsByUser` のテスト追加（+3 テスト、計 25 テスト）
+- [x] `tests/app/conversation.test.ts`: 上限超過シナリオのテスト追加（+4 テスト、計 211 テスト）
+  - pending 9件（上限未満）→ 通常フロー開始
+  - pending 10件（上限ちょうど）→ エラーメッセージ・セッション未作成
+  - pending 15件（上限超過）→ エラーメッセージ
+  - グローバル `beforeEach` に `countPendingReportsByUser` のデフォルトモック（0件）を追加
+- [x] lint エラーなし、テスト 211 件全通過
+
+### 採用判断メモ
+
+- カウント対象を `pending` のみとした理由: 管理者が対応済みにすると枠が回復し、誠実なユーザーが再通報できる
+- チェックタイミングを「通報する」受信時とした理由: R2 への写真アップロードが発生する前に弾けるため、R2 未登録状態でも安全
+- 上限値 10: ユーザー要件による（pending のみカウントのため全件とは異なる）
+
+### 変更ファイル
+
+| ファイル | 種別 |
+|---|---|
+| `src/lib/db.ts` | 更新 |
+| `src/app/conversation.ts` | 更新 |
+| `tests/lib/db.test.ts` | 更新 |
+| `tests/app/conversation.test.ts` | 更新 |
+| `docs/progress.md` | 本ステップ追記 |

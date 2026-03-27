@@ -331,6 +331,23 @@ export async function deleteReport(db: D1Database, id: number): Promise<boolean>
 }
 
 /**
+ * 指定ユーザーの pending 通報件数を返す。
+ * 上限チェックに使用する（pending のみカウントし、対応済み件数は枠を消費しない）。
+ */
+export async function countPendingReportsByUser(
+  db: D1Database,
+  lineUserId: string,
+): Promise<number> {
+  const row = await db
+    .prepare(
+      "SELECT COUNT(*) AS cnt FROM reports WHERE line_user_id = ? AND status = 'pending'",
+    )
+    .bind(lineUserId)
+    .first<{ cnt: number }>();
+  return row?.cnt ?? 0;
+}
+
+/**
  * ステータスを更新し、更新後レコードを返す。id 不一致時は null を返す。
  */
 export async function updateReportStatus(

@@ -3,6 +3,21 @@ main = "src/app/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
+# ========================================================================
+# 本番デプロイ方針
+# ========================================================================
+# ステージング環境は用意しないため、`wrangler deploy`（--env フラグなし）を使用する。
+# [env.production] / [env.staging] セクションは将来の拡張用に定義のみ残す。
+#
+# 本番デプロイ前に必ず以下を実施すること：
+#   1. `wrangler d1 create ozu-road-report-db` を実行し、出力された
+#      database_id を下記 [[d1_databases]] の database_id に上書きする
+#   2. `wrangler d1 migrations apply ozu-road-report-db`（--local なし）
+#   3. `wrangler r2 bucket create ozu-road-report-images`
+#   4. `wrangler secret put` で全シークレットを登録
+#   5. `wrangler deploy`
+# ========================================================================
+
 # ローカル開発用のポート設定
 [dev]
 port = 8787
@@ -10,18 +25,20 @@ local_protocol = "http"
 ip = "0.0.0.0"
 
 # D1 データベース
-# database_id は `wrangler d1 create ozu-road-report-db` 実行後に設定する
+# !! 本番デプロイ前に database_id を実際の値に変更すること !!
+# `wrangler d1 create ozu-road-report-db` を実行して取得する
 [[d1_databases]]
 binding = "DB"
 database_name = "ozu-road-report-db"
-database_id = "00000000-0000-0000-0000-000000000000" # ローカル開発用ダミー値。本番は wrangler d1 create で取得した ID に変更する
+database_id = "4a6ae791-8637-465a-a435-6d2d047ca727" # 本番 D1 の ID（2026-03-27 設定済み）
 
-# R2 バケット（bucket_name は `wrangler r2 bucket create ozu-road-report-images` 実行後に確認）
+# R2 バケット
+# `wrangler r2 bucket create ozu-road-report-images` を実行して作成する
 [[r2_buckets]]
 binding = "IMAGES"
 bucket_name = "ozu-road-report-images"
 
-# 環境変数（.dev.vars または Cloudflare Dashboard で設定）
+# 環境変数（値は .dev.vars または `wrangler secret put` で設定）
 # LINE_CHANNEL_SECRET = ""
 # LINE_CHANNEL_ACCESS_TOKEN = ""
 # LINE_ADMIN_USER_ID = ""   # 任意: 管理者の LINE ユーザー ID（設定すると新規通報時に LINE プッシュ通知）
@@ -29,10 +46,27 @@ bucket_name = "ozu-road-report-images"
 # ADMIN_PASSWORD_HASH = ""  # SHA-256 hex（echo -n "yourpassword" | sha256sum）
 # ADMIN_SESSION_SECRET = "" # ランダムな長い文字列（openssl rand -hex 32 等）
 
+# ========================================================================
+# 名前付き環境（現時点では未使用・将来拡張用）
+# ========================================================================
+# 現状は `wrangler deploy`（フラグなし）で top-level 設定をそのまま本番に使用する。
+# staging / production 環境を分けて運用したい場合はここに設定を追加し、
+# `wrangler deploy --env production` のように --env フラグを指定する。
+#
+# 注意: [[d1_databases]] / [[r2_buckets]] は named env では再宣言が必要。
+# top-level の database_id はそのまま継承されないため、
+# 環境ごとに正しい database_id を明示すること。
+
 [env.production]
 name = "ozu-road-report-prod"
-# 本番環境の設定はここに追記する
+# [[env.production.d1_databases]]
+# binding = "DB"
+# database_name = "ozu-road-report-db"
+# database_id = "" # 本番 D1 の ID を設定
 
 [env.staging]
 name = "ozu-road-report-staging"
-# ステージング環境の設定はここに追記する
+# [[env.staging.d1_databases]]
+# binding = "DB"
+# database_name = "ozu-road-report-db-staging"
+# database_id = "" # ステージング D1 の ID を設定

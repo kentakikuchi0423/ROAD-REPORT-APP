@@ -12,6 +12,7 @@ import {
   getReports,
   getReportById,
   updateReportStatus,
+  countPendingReportsByUser,
 } from "../../src/lib/db";
 import type { ConversationSession } from "../../src/types";
 
@@ -355,5 +356,47 @@ describe("updateReportStatus", () => {
     const [status, , id] = bindFn.mock.calls[0] as [string, string, number];
     expect(status).toBe("resolved");
     expect(id).toBe(1);
+  });
+});
+
+// ---- countPendingReportsByUser -----------------------------------------------
+
+describe("countPendingReportsByUser", () => {
+  it("pending 件数を返す", async () => {
+    const db = {
+      prepare: vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnValue({
+          first: vi.fn().mockResolvedValue({ cnt: 3 }),
+        }),
+      }),
+    } as unknown as D1Database;
+
+    const count = await countPendingReportsByUser(db, "U123");
+    expect(count).toBe(3);
+  });
+
+  it("該当なしのとき 0 を返す", async () => {
+    const db = {
+      prepare: vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnValue({
+          first: vi.fn().mockResolvedValue(null),
+        }),
+      }),
+    } as unknown as D1Database;
+
+    const count = await countPendingReportsByUser(db, "U999");
+    expect(count).toBe(0);
+  });
+
+  it("SQL に line_user_id と status = 'pending' が渡される", async () => {
+    const bindFn = vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue({ cnt: 0 }) });
+    const db = {
+      prepare: vi.fn().mockReturnValue({ bind: bindFn }),
+    } as unknown as D1Database;
+
+    await countPendingReportsByUser(db, "Uabc");
+    expect(bindFn.mock.calls[0]).toEqual(["Uabc"]);
+    const sql = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(sql).toContain("status = 'pending'");
   });
 });
