@@ -1071,8 +1071,8 @@ function getTodayJst(): string {
 
 // ---- Cron エントリポイント ---------------------------------------------------
 
-/** タイムアウト閾値（秒）: 3時間 */
-const SESSION_TIMEOUT_SECONDS = 3 * 60 * 60;
+/** タイムアウト閾値（秒）: 1時間 */
+const SESSION_TIMEOUT_SECONDS = 60 * 60;
 
 /**
  * 期限切れセッションを "timed_out" に更新する。

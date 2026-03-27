@@ -13,6 +13,7 @@ import {
   getReportById,
   updateReportStatus,
   countPendingReportsByUser,
+  markTimedOutSessions,
 } from "../../src/lib/db";
 import type { ConversationSession } from "../../src/types";
 
@@ -398,5 +399,44 @@ describe("countPendingReportsByUser", () => {
     expect(bindFn.mock.calls[0]).toEqual(["Uabc"]);
     const sql = ((db.prepare as ReturnType<typeof vi.fn>).mock.calls[0]!)[0] as string;
     expect(sql).toContain("status = 'pending'");
+  });
+});
+
+// ---- markTimedOutSessions ---------------------------------------------------
+
+describe("markTimedOutSessions", () => {
+  it("UPDATE SQL が実行され、変更件数を返す", async () => {
+    const runFn = vi.fn().mockResolvedValue({ meta: { changes: 3 } });
+    const bindFn = vi.fn().mockReturnValue({ run: runFn });
+    const db = {
+      prepare: vi.fn().mockReturnValue({ bind: bindFn }),
+    } as unknown as D1Database;
+
+    const count = await markTimedOutSessions(db, 3600);
+    expect(count).toBe(3);
+    expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining("timed_out"));
+    expect(runFn).toHaveBeenCalled();
+  });
+
+  it("しきい値（秒）が負値として bind に渡される", async () => {
+    const runFn = vi.fn().mockResolvedValue({ meta: { changes: 0 } });
+    const bindFn = vi.fn().mockReturnValue({ run: runFn });
+    const db = {
+      prepare: vi.fn().mockReturnValue({ bind: bindFn }),
+    } as unknown as D1Database;
+
+    await markTimedOutSessions(db, 3600);
+    expect(bindFn).toHaveBeenCalledWith(-3600);
+  });
+
+  it("変更件数が 0 のとき 0 を返す", async () => {
+    const runFn = vi.fn().mockResolvedValue({ meta: { changes: 0 } });
+    const bindFn = vi.fn().mockReturnValue({ run: runFn });
+    const db = {
+      prepare: vi.fn().mockReturnValue({ bind: bindFn }),
+    } as unknown as D1Database;
+
+    const count = await markTimedOutSessions(db, 3600);
+    expect(count).toBe(0);
   });
 });

@@ -935,6 +935,29 @@ describe("completed ステップ", () => {
   });
 });
 
+// ---- timed_out ステップ -------------------------------------------------------
+
+describe("timed_out ステップ", () => {
+  it("任意のメッセージ → セッション削除 + タイムアウト案内", async () => {
+    mockGetSession.mockResolvedValue({
+      lineUserId: USER_ID,
+      step: "timed_out",
+      data: {},
+      createdAt: "2026-03-26T00:00:00.000Z",
+      updatedAt: "2026-03-26T00:00:00.000Z",
+    });
+
+    await handleConversationMessage(makeTextEvent("続きを送る"), USER_ID, mockEnv);
+
+    expect(mockDeleteSession).toHaveBeenCalledOnce();
+    expect(mockInsertReport).not.toHaveBeenCalled();
+    expect(mockUpsertSession).not.toHaveBeenCalled();
+    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("リセットされました");
+  });
+});
+
 // ---- キャンセル確認フロー（cancelling ステップ） ---------------------------------
 
 describe("「通報を中止する」→ cancelling ステップへ遷移", () => {
