@@ -104,7 +104,7 @@ describe("createSessionToken / verifySessionToken", () => {
     const after = Date.now();
 
     const [expiryStr] = token.split("|");
-    const expiry = parseInt(expiryStr, 10);
+    const expiry = parseInt(expiryStr!, 10);
     expect(expiry).toBeGreaterThanOrEqual(before + SESSION_DURATION_MS);
     expect(expiry).toBeLessThanOrEqual(after + SESSION_DURATION_MS);
   });

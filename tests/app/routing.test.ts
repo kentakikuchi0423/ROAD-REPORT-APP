@@ -238,7 +238,7 @@ describe("webhook event routing", () => {
     );
   });
 
-  it("follow イベントは replyMessage を呼び出す", async () => {
+  it("follow イベントは返信なしで 200 を返す", async () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", mockFetch);
 
@@ -256,10 +256,7 @@ describe("webhook event routing", () => {
 
     const res = await worker.fetch(req, mockEnv, mockCtx);
     expect(res.status).toBe(200);
-    expect(mockFetch).toHaveBeenCalledWith(
-      "https://api.line.me/v2/bot/message/reply",
-      expect.objectContaining({ method: "POST" }),
-    );
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("未対応メッセージ種別（sticker）は返信なしで 200 を返す", async () => {

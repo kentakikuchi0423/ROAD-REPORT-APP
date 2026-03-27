@@ -396,7 +396,7 @@ describe("countPendingReportsByUser", () => {
 
     await countPendingReportsByUser(db, "Uabc");
     expect(bindFn.mock.calls[0]).toEqual(["Uabc"]);
-    const sql = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    const sql = ((db.prepare as ReturnType<typeof vi.fn>).mock.calls[0]!)[0] as string;
     expect(sql).toContain("status = 'pending'");
   });
 });

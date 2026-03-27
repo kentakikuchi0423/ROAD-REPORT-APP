@@ -16,7 +16,7 @@
 
 import type { webhook } from "@line/bot-sdk";
 import type { Env } from "../types";
-import { verifySignature, replyMessage } from "../lib/line";
+import { verifySignature } from "../lib/line";
 import { handleConversationMessage, handleConversationPostback } from "./conversation";
 
 // ---- エントリポイント -------------------------------------------------------
@@ -93,8 +93,8 @@ async function routeEvent(event: webhook.Event, env: Env): Promise<void> {
       break;
 
     case "follow":
+      // ウェルカムメッセージは送信しない。「通報する」送信で会話を開始する。
       console.log(`[webhook] follow event id=${event.webhookEventId}`);
-      await handleFollowEvent(event, env);
       break;
 
     case "unfollow":
@@ -160,25 +160,4 @@ function extractUserId(event: webhook.Event): string | null {
   return ("userId" in source && typeof source.userId === "string")
     ? source.userId
     : null;
-}
-
-/**
- * フォローイベント受信時の処理。
- * ウェルカムメッセージを送信し、通報開始を案内する。
- */
-async function handleFollowEvent(
-  event: webhook.FollowEvent,
-  env: Env,
-): Promise<void> {
-  if (!event.replyToken) return;
-  await replyMessage(
-    event.replyToken,
-    [
-      {
-        type: "text",
-        text: "大洲市の道路破損を通報できるアプリです。\n「通報する」と送信して開始してください。",
-      },
-    ],
-    env.LINE_CHANNEL_ACCESS_TOKEN,
-  );
 }

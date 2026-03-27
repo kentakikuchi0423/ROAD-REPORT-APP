@@ -783,7 +783,7 @@ describe("confirming ステップ", () => {
 
     // insertReport が null 値で呼ばれる
     expect(mockInsertReport).toHaveBeenCalledOnce();
-    const [, reportData] = mockInsertReport.mock.calls[0] as [D1Database, Record<string, unknown>];
+    const [, reportData] = mockInsertReport.mock.calls[0] as unknown as [D1Database, Record<string, unknown>];
     expect(reportData.locationAddress).toBeNull();
     expect(reportData.shootingDate).toBeNull();
     expect(reportData.remarks).toBeNull();
@@ -801,7 +801,7 @@ describe("confirming ステップ", () => {
 
     // insertReport が正しい引数で呼ばれる
     expect(mockInsertReport).toHaveBeenCalledOnce();
-    const [, reportData] = mockInsertReport.mock.calls[0] as [D1Database, Record<string, unknown>];
+    const [, reportData] = mockInsertReport.mock.calls[0] as unknown as [D1Database, Record<string, unknown>];
     expect(reportData.status).toBe("pending");
     expect(reportData.closePhotoKey).toBe("reports/20260325/confirm-uuid/close.jpg");
     expect(reportData.latitude).toBe(33.5057);

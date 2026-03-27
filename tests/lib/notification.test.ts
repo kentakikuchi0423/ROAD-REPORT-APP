@@ -74,9 +74,9 @@ describe("createAdminNotifier", () => {
         (mockFetch.mock.calls[0] as [string, RequestInit])[1].body as string,
       ) as { to: string; messages: { type: string; text: string }[] };
       expect(body.to).toBe("Uadmin123");
-      expect(body.messages[0].type).toBe("text");
-      expect(body.messages[0].text).toContain("OZU-20260326-001");
-      expect(body.messages[0].text).toContain("愛媛県大洲市大洲649");
+      expect(body.messages[0]!.type).toBe("text");
+      expect(body.messages[0]!.text).toContain("OZU-20260326-001");
+      expect(body.messages[0]!.text).toContain("愛媛県大洲市大洲649");
     });
 
     it("locationAddress が null の場合は座標（緯度・経度）を表示する", async () => {
@@ -89,8 +89,8 @@ describe("createAdminNotifier", () => {
       const body = JSON.parse(
         (mockFetch.mock.calls[0] as [string, RequestInit])[1].body as string,
       ) as { messages: { text: string }[] };
-      expect(body.messages[0].text).toContain("33.5057");
-      expect(body.messages[0].text).toContain("132.5595");
+      expect(body.messages[0]!.text).toContain("33.5057");
+      expect(body.messages[0]!.text).toContain("132.5595");
     });
 
     it("LINE API が非 2xx を返した場合は例外を throw する", async () => {
