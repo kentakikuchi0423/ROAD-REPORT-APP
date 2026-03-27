@@ -18,6 +18,10 @@ compatibility_flags = ["nodejs_compat"]
 #   5. `wrangler deploy`
 # ========================================================================
 
+# Cron Trigger: 30分ごとにタイムアウトセッションを削除する
+[triggers]
+crons = ["*/30 * * * *"]
+
 # ローカル開発用のポート設定
 [dev]
 port = 8787

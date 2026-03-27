@@ -57,7 +57,8 @@ export type ConversationStep =
   | "confirming" // 確認中（送信する／やり直す を待つ）。「やり直す」は consent ステップへ戻る
   | "cancelling" // キャンセル確認中（「はい、中止します」「いいえ、続けます」を待つ）
   | "completed" // 完了
-  | "cancelled"; // キャンセル済み
+  | "cancelled" // キャンセル済み
+  | "timed_out"; // タイムアウト（Cron により設定。次回メッセージ時に案内して削除）
 
 /** 会話セッション */
 export interface ConversationSession {

@@ -1026,3 +1026,41 @@ top-level 設定をそのまま本番に使用する方針を確定。
 | `tests/app/routing.test.ts` | 更新 |
 | `README.md` | 更新 |
 | `docs/progress.md` | 本ステップ追記 |
+
+---
+
+## Step 14: セッションタイムアウト実装 ✅
+
+3時間以上更新されないセッションを Cron で自動タイムアウトし、次回メッセージ時にユーザーへ通知する。
+
+### 実装内容
+
+- [x] `src/types.ts`: `ConversationStep` に `"timed_out"` を追加
+- [x] `src/lib/db.ts`: `markTimedOutSessions()` 関数を追加（閾値秒数を超えたセッションを `step = 'timed_out'` に更新）
+- [x] `src/app/conversation.ts`:
+  - `markTimedOutSessions` をインポート
+  - `MSG_TIMED_OUT` メッセージ定数を追加
+  - `switch` 文に `"timed_out"` ケースを追加（案内送信 → セッション削除）
+  - `runSessionTimeoutJob()` を Cron 用エクスポート関数として追加（閾値：3時間）
+- [x] `src/app/index.ts`: `scheduled` ハンドラを追加（`runSessionTimeoutJob` を呼ぶ）
+- [x] `wrangler.toml`: `[triggers]` セクションを追加（`*/30 * * * *`：30分ごと）
+
+### 設計判断
+
+| 項目 | 決定 |
+|---|---|
+| タイムアウト時間 | 3時間（現場での中断・電話割り込みを考慮）|
+| Cron 間隔 | 30分（精度・コストのバランス）|
+| タイムアウト方式 | 即削除ではなく `step = 'timed_out'` に更新し、次回メッセージ時に理由を伝えてから削除 |
+| `completed` ステップは対象外 | 二重送信防止の完了フラグを誤って上書きしないよう除外 |
+
+### 変更ファイル
+
+| ファイル | 種別 |
+|---|---|
+| `src/types.ts` | 更新 |
+| `src/lib/db.ts` | 更新 |
+| `src/app/conversation.ts` | 更新 |
+| `src/app/index.ts` | 更新 |
+| `wrangler.toml` | 更新 |
+| `docs/progress.md` | 本ステップ追記 |

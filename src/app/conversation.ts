@@ -37,6 +37,7 @@ import {
   insertReport,
   deleteSession,
   countPendingReportsByUser,
+  markTimedOutSessions,
 } from "../lib/db";
 import { replyMessage, getMessageContent } from "../lib/line";
 import { uploadImage } from "../lib/r2";
@@ -197,6 +198,10 @@ const MSG_SESSION_ERROR =
 /** 通報送信済み（completed）の場合の案内（二重送信時など） */
 const MSG_ALREADY_SUBMITTED =
   "この通報はすでに受け付け済みです。\n別の通報を行う場合は「通報する」と送信してください。";
+
+/** タイムアウトにより入力内容が削除された場合の案内 */
+const MSG_TIMED_OUT =
+  "入力中の内容は一定時間操作がなかったためリセットされました。\n再度通報する場合は「通報する」と送信してください。";
 
 /** insertReport 失敗時の一時エラーメッセージ */
 const MSG_SUBMIT_ERROR =
@@ -454,6 +459,16 @@ export async function handleConversationMessage(
       await replyMessage(
         replyToken,
         [{ type: "text", text: MSG_ALREADY_SUBMITTED }],
+        env.LINE_CHANNEL_ACCESS_TOKEN,
+      );
+      break;
+
+    case "timed_out":
+      // Cron によりタイムアウト設定済み。案内を送り、セッションを削除する。
+      await deleteSession(env.DB, userId);
+      await replyMessage(
+        replyToken,
+        [{ type: "text", text: MSG_TIMED_OUT }],
         env.LINE_CHANNEL_ACCESS_TOKEN,
       );
       break;
@@ -1052,6 +1067,19 @@ function getTodayJst(): string {
   const mm = (jst.getUTCMonth() + 1).toString().padStart(2, "0");
   const dd = jst.getUTCDate().toString().padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+// ---- Cron エントリポイント ---------------------------------------------------
+
+/** タイムアウト閾値（秒）: 3時間 */
+const SESSION_TIMEOUT_SECONDS = 3 * 60 * 60;
+
+/**
+ * 期限切れセッションを "timed_out" に更新する。
+ * Cloudflare Workers の scheduled ハンドラから呼ぶ。
+ */
+export async function runSessionTimeoutJob(env: Env): Promise<void> {
+  await markTimedOutSessions(env.DB, SESSION_TIMEOUT_SECONDS);
 }
 
 // ---- postback エントリポイント -----------------------------------------------

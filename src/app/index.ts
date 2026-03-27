@@ -12,6 +12,7 @@ import type { Env } from "../types";
 import { handleWebhook } from "./webhook";
 import { handleAdmin } from "./admin/index";
 import { ADMIN_BASE_PATH } from "./admin/config";
+import { runSessionTimeoutJob } from "./conversation";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -45,5 +46,10 @@ export default {
 
     // その他は 404
     return new Response("Not Found", { status: 404 });
+  },
+
+  // Cron Trigger: 30分ごとにタイムアウトセッションを処理する
+  async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    await runSessionTimeoutJob(env);
   },
 } satisfies ExportedHandler<Env>;

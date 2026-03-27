@@ -215,6 +215,27 @@ export async function upsertSession(
 }
 
 /**
+ * 最終更新から指定秒数以上経過したセッションを "timed_out" に更新する。
+ * Cron Trigger から呼ぶ。更新した件数を返す。
+ */
+export async function markTimedOutSessions(
+  db: D1Database,
+  thresholdSeconds: number,
+): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE sessions
+       SET step = 'timed_out', updated_at = datetime('now')
+       WHERE step != 'timed_out'
+         AND step != 'completed'
+         AND updated_at < datetime('now', ? || ' seconds')`,
+    )
+    .bind(-thresholdSeconds)
+    .run();
+  return result.meta.changes ?? 0;
+}
+
+/**
  * セッションを削除する。会話完了またはキャンセル時に呼ぶ。
  */
 export async function deleteSession(
