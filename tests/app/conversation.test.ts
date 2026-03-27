@@ -328,20 +328,32 @@ describe("セッションなし", () => {
     expect(mockUpsertSession).toHaveBeenCalledOnce();
   });
 
-  it("「通報する」以外のテキスト → 開始案内メッセージ（セッション作成なし）", async () => {
+  it("「通報」でもフロー開始", async () => {
+    await handleConversationMessage(makeTextEvent("通報"), USER_ID, mockEnv);
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("同意する");
+  });
+
+  it("「つうほう」でもフロー開始", async () => {
+    await handleConversationMessage(makeTextEvent("つうほう"), USER_ID, mockEnv);
+    expect(mockUpsertSession).toHaveBeenCalledOnce();
+    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
+    expect((messages[0] as { text: string }).text).toContain("同意する");
+  });
+
+  it("トリガーワード以外のテキスト → 返信なし・セッション作成なし", async () => {
     await handleConversationMessage(makeTextEvent("こんにちは"), USER_ID, mockEnv);
 
     expect(mockUpsertSession).not.toHaveBeenCalled();
-    expect(mockReplyMessage).toHaveBeenCalledOnce();
-    const [, messages] = mockReplyMessage.mock.calls[0] as [string, unknown[], string];
-    expect((messages[0] as { text: string }).text).toContain("通報する");
+    expect(mockReplyMessage).not.toHaveBeenCalled();
   });
 
-  it("画像メッセージ → 開始案内メッセージ（セッション作成なし）", async () => {
+  it("画像メッセージ → 返信なし・セッション作成なし", async () => {
     await handleConversationMessage(makeImageEvent(), USER_ID, mockEnv);
 
     expect(mockUpsertSession).not.toHaveBeenCalled();
-    expect(mockReplyMessage).toHaveBeenCalledOnce();
+    expect(mockReplyMessage).not.toHaveBeenCalled();
   });
 
   it("未対応種別（sticker）→ 返信なし", async () => {

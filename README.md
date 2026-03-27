@@ -137,7 +137,6 @@ npx wrangler dev
 
 | 機能 | ローカル確認 | 備考 |
 |---|---|---|
-| トップページ・プライバシーポリシー | ✅ 可能 | |
 | 管理画面（ログイン・一覧・詳細） | ✅ 可能 | D1 migration 適用済みが前提 |
 | LINE Webhook の受信 | ❌ 不可 | LINE プラットフォームへの URL 登録が必要 |
 | 画像の R2 保存 | ✅ ローカル R2 で可能 | wrangler dev 起動時にローカル R2 エミュレートあり |
@@ -166,10 +165,30 @@ npm test
 
 ---
 
+## LINE 会話の動作仕様
+
+- ユーザーが「**通報する**」「**通報**」「**つうほう**」のいずれかを送信すると、利用同意フローが開始されます。
+- それ以外のメッセージ（雑談・スタンプなど）には **返信しません**（セッションがない場合）。
+- follow イベント（友だち追加）時は Welcome メッセージを自動送信します。
+
+---
+
 ## wrangler.toml について
 
-`database_id` はローカル開発用のダミー値 (`00000000-0000-0000-0000-000000000000`) が設定されています。
-本番デプロイ前に `wrangler d1 create ozu-road-report-db` で取得した実際の ID に変更してください。
+`database_id` には本番 D1 データベースの ID が設定されています。
+ローカル開発では `wrangler dev` の `--local` モードが使われるため、この値がローカル環境に影響することはありません。
+
+本番向けに D1 migration を適用するには `--remote` フラグが必要です（wrangler v4 はデフォルトがローカル）:
+
+```bash
+npx wrangler d1 migrations apply ozu-road-report-db --remote
+```
+
+本番デプロイには `--env=""` フラグを使用します（named environment が定義されている場合に top-level 設定を明示指定）:
+
+```bash
+npx wrangler deploy --env=""
+```
 
 ---
 

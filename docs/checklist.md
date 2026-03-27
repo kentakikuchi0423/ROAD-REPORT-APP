@@ -8,7 +8,7 @@
 
 ## 0. 事前確認（ローカル）
 
-- [ ] `npm test` がすべてパスすること（205 件以上）
+- [ ] `npm test` がすべてパスすること（213 件以上）
 - [ ] `npx eslint .` でエラーがないこと
 - [ ] `.dev.vars` が git に含まれていないことを確認（`git status` でトラッキングされていないこと）
 - [ ] `git log --all -- .dev.vars` でコミット履歴がないことを確認
@@ -52,10 +52,10 @@ database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ## 3. D1 migration 適用（本番）
 
 ```bash
-npx wrangler d1 migrations apply ozu-road-report-db
+npx wrangler d1 migrations apply ozu-road-report-db --remote
 ```
 
-（`--local` フラグなし。本番 D1 に適用される）
+（`--remote` フラグ必須。wrangler v4 はデフォルトがローカルのため省略すると本番に適用されない）
 
 - [ ] コマンドが正常終了すること（エラーなし）
 - [ ] 「Applied N migration(s)」と表示されること
@@ -191,7 +191,7 @@ npx wrangler d1 create ozu-road-report-db
 # 2. wrangler.toml の database_id を実際の値に書き換える（手動）
 
 # 3. D1 migration 適用（本番）
-npx wrangler d1 migrations apply ozu-road-report-db
+npx wrangler d1 migrations apply ozu-road-report-db --remote
 
 # 4. R2 バケット作成
 npx wrangler r2 bucket create ozu-road-report-images

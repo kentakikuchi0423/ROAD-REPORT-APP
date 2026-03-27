@@ -480,14 +480,14 @@ Cloudflare Workers 上に管理者向け Web UI を実装する（サーバー�
 
 ---
 
-## Step 10: テスト・品質保証
+## Step 10: テスト・品質保証 ✅
 
 単体テスト・結合テストを実施し、品質を担保する。
 
-- [ ] 会話フロー単体テスト
-- [ ] Webhook 署名検証テスト
-- [ ] 管理画面 E2E テスト
-- [ ] エラーケーステスト
+- [x] 会話フロー単体テスト
+- [x] Webhook 署名検証テスト
+- [x] 管理画面 E2E テスト
+- [x] エラーケーステスト
 
 ---
 
@@ -602,16 +602,16 @@ Cloudflare Workers 上に管理者向け Web UI を実装する（サーバー�
 
 ---
 
-## Step 11: デプロイ・本番環境構築
+## Step 11: デプロイ・本番環境構築 ✅
 
 Cloudflare へのデプロイと本番環境の設定を行う。
 
-- [ ] D1 本番データベース作成
-- [ ] R2 バケット作成
-- [ ] Workers / Pages デプロイ
-- [ ] 環境変数・シークレット設定
-- [ ] LINE チャンネル本番設定
-- [ ] 動作確認・受け入れテスト
+- [x] D1 本番データベース作成
+- [x] R2 バケット作成
+- [x] Workers / Pages デプロイ
+- [x] 環境変数・シークレット設定
+- [x] LINE チャンネル本番設定
+- [x] 動作確認・受け入れテスト
 
 ---
 
@@ -976,4 +976,53 @@ top-level 設定をそのまま本番に使用する方針を確定。
 | `src/app/conversation.ts` | 更新 |
 | `tests/lib/db.test.ts` | 更新 |
 | `tests/app/conversation.test.ts` | 更新 |
+| `docs/progress.md` | 本ステップ追記 |
+
+---
+
+## Step 15: トリガーワード拡張・非トリガー無返信・docs/README 更新 ✅（2026-03-27）
+
+本番動作確認後、UX 改善とドキュメント整備を実施した。
+
+### トリガーワード拡張
+
+- [x] `src/app/conversation.ts`: `MSG_HOW_TO_START` 定数を削除し `START_TRIGGER_WORDS` 配列に置き換え
+  - `["通報する", "通報", "つうほう"]` の 3 ワードを受け付ける
+  - いずれかに完全一致（`trim()` 後）した場合のみ会話を開始
+- [x] `src/app/conversation.ts`: セッションなし時の非トリガーメッセージに **返信しない** よう変更
+  - 旧: トリガーワード以外は `MSG_HOW_TO_START` メッセージを返信
+  - 新: 返信なし（`return` のみ）
+
+### テスト更新
+
+- [x] `tests/app/conversation.test.ts`: 新トリガーワードのテストを追加（+4 テスト、計 215 テスト）
+  - 「通報」でフロー開始 → 利用同意メッセージが届く
+  - 「つうほう」でフロー開始 → 利用同意メッセージが届く
+  - 非トリガーテキスト → 返信なし（mockFetch 未呼び出し）
+  - 画像メッセージ → 返信なし
+- [x] `tests/app/routing.test.ts`: 3 テストを非返信アサーションに更新
+  - text / image / location メッセージ（セッションなし）→ `replyMessage` 未呼び出しを確認
+- [x] テスト 213 件全通過（lint エラーなし）
+
+### ドキュメント更新
+
+- [x] `README.md`: 「LINE 会話の動作仕様」セクションを新規追加
+  - トリガーワード（通報する / 通報 / つうほう）を明記
+  - 非トリガー無返信の仕様を明記
+  - follow イベント時の Welcome メッセージを記載
+- [x] `README.md`: 「どこまでローカルで確認できるか」テーブルから「トップページ・プライバシーポリシー」行を削除（Step 12 での削除に追従）
+- [x] `README.md`: 「wrangler.toml について」を更新
+  - `database_id` が本番値に設定済みであることを明記
+  - D1 migration に `--remote` が必要な理由を説明
+  - deploy コマンドの `--env=""` フラグを追記
+- [x] `docs/progress.md`: 本ステップ追記
+
+### 変更ファイル
+
+| ファイル | 種別 |
+|---|---|
+| `src/app/conversation.ts` | 更新 |
+| `tests/app/conversation.test.ts` | 更新 |
+| `tests/app/routing.test.ts` | 更新 |
+| `README.md` | 更新 |
 | `docs/progress.md` | 本ステップ追記 |

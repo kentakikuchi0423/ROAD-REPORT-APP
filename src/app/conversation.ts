@@ -64,8 +64,8 @@ const MSG_REPORT_LIMIT_EXCEEDED = [
   `※本アプリは『${BRANDING.developer}』が個人で開発したものです。大洲市の公式サービスではないため、大洲市へのお問い合わせはご遠慮ください。`,
 ].join("\n");
 
-const MSG_HOW_TO_START =
-  "大洲市の道路破損通報アプリへようこそ。\n通報を開始するには「通報する」と送信してください。";
+/** 通報フローを開始するトリガーワード */
+const START_TRIGGER_WORDS = ["通報する", "通報", "つうほう"];
 
 /**
  * 利用同意を求めるメッセージ。
@@ -473,7 +473,7 @@ async function handleNoSession(
 ): Promise<void> {
   const isStartTrigger =
     event.message.type === "text" &&
-    event.message.text.trim() === "通報する";
+    START_TRIGGER_WORDS.includes(event.message.text.trim());
 
   if (isStartTrigger) {
     const pendingCount = await countPendingReportsByUser(env.DB, userId);
@@ -503,11 +503,7 @@ async function handleNoSession(
     return;
   }
 
-  await replyMessage(
-    replyToken,
-    [{ type: "text", text: MSG_HOW_TO_START }],
-    env.LINE_CHANNEL_ACCESS_TOKEN,
-  );
+  // トリガーワード以外には返信しない
 }
 
 // ---- consent ステップ --------------------------------------------------------

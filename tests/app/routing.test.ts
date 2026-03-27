@@ -150,7 +150,7 @@ describe("webhook event routing", () => {
     });
   }
 
-  it("text メッセージイベントは replyMessage を呼び出す", async () => {
+  it("text メッセージイベント（トリガーワード以外）はセッションなしで返信しない", async () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", mockFetch);
 
@@ -169,14 +169,14 @@ describe("webhook event routing", () => {
 
     const res = await worker.fetch(req, mockEnv, mockCtx);
     expect(res.status).toBe(200);
-    // replyMessage が LINE Reply API を呼んでいることを確認
-    expect(mockFetch).toHaveBeenCalledWith(
+    // トリガーワード以外はセッションなし時に返信しない
+    expect(mockFetch).not.toHaveBeenCalledWith(
       "https://api.line.me/v2/bot/message/reply",
-      expect.objectContaining({ method: "POST" }),
+      expect.anything(),
     );
   });
 
-  it("image メッセージイベントは replyMessage を呼び出す", async () => {
+  it("image メッセージイベントはセッションなしで返信しない", async () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", mockFetch);
 
@@ -200,13 +200,13 @@ describe("webhook event routing", () => {
 
     const res = await worker.fetch(req, mockEnv, mockCtx);
     expect(res.status).toBe(200);
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockFetch).not.toHaveBeenCalledWith(
       "https://api.line.me/v2/bot/message/reply",
-      expect.objectContaining({ method: "POST" }),
+      expect.anything(),
     );
   });
 
-  it("location メッセージイベントは replyMessage を呼び出す", async () => {
+  it("location メッセージイベントはセッションなしで返信しない", async () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", mockFetch);
 
@@ -232,9 +232,9 @@ describe("webhook event routing", () => {
 
     const res = await worker.fetch(req, mockEnv, mockCtx);
     expect(res.status).toBe(200);
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockFetch).not.toHaveBeenCalledWith(
       "https://api.line.me/v2/bot/message/reply",
-      expect.objectContaining({ method: "POST" }),
+      expect.anything(),
     );
   });
 
