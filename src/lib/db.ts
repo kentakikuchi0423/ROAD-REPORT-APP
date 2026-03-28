@@ -195,21 +195,18 @@ export async function upsertSession(
   db: D1Database,
   session: ConversationSession,
 ): Promise<void> {
-  const now = new Date().toISOString();
   await db
     .prepare(
       `INSERT OR REPLACE INTO sessions (line_user_id, step, data, created_at, updated_at)
        VALUES (?, ?, ?, COALESCE(
-         (SELECT created_at FROM sessions WHERE line_user_id = ?), ?
-       ), ?)`,
+         (SELECT created_at FROM sessions WHERE line_user_id = ?), datetime('now')
+       ), datetime('now'))`,
     )
     .bind(
       session.lineUserId,
       session.step,
       JSON.stringify(session.data),
       session.lineUserId,
-      session.createdAt,
-      now,
     )
     .run();
 }

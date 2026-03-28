@@ -1064,3 +1064,47 @@ top-level 設定をそのまま本番に使用する方針を確定。
 | `src/app/index.ts` | 更新 |
 | `wrangler.toml` | 更新 |
 | `docs/progress.md` | 本ステップ追記 |
+
+---
+
+## Step 16: セッションタイムアウト不動作バグ修正 ✅（2026-03-28）
+
+### 問題
+
+本番環境で近景写真送信後、10時間後に遠景写真を送信しても通常通り通報が完了できた。
+セッションタイムアウト（1時間）が機能していなかった。
+
+### 原因
+
+`upsertSession()` が `updated_at` を JavaScript の `new Date().toISOString()` で保存していたが、
+`markTimedOutSessions()` の比較が SQLite の `datetime('now')` 形式を使っているため、
+フォーマット不一致により比較が常に false になっていた。
+
+| 格納値（upsertSession） | 比較値（markTimedOutSessions） |
+|---|---|
+| `"2024-01-01T10:00:00.000Z"` (ISO 8601) | `"2024-01-01 09:00:00"` (SQLite datetime) |
+
+SQLite は文字列比較を行うため、10文字目の `'T'`(ASCII 84) > `' '`(ASCII 32) となり、
+ISO形式タイムスタンプは常に SQLite datetime より「大きい」と判定される。
+→ タイムアウト条件が永遠に false → Cron実行後も1件もタイムアウト判定されない。
+
+### 修正
+
+`upsertSession()` の `updated_at`（および `created_at` フォールバック）を
+JavaScript バインドから SQLite の `datetime('now')` に変更。
+
+### 変更ファイル
+
+| ファイル | 種別 |
+|---|---|
+| `src/lib/db.ts` | バグ修正（`upsertSession` の `updated_at` 保存形式を SQLite 形式に統一）|
+| `docs/progress.md` | 本ステップ追記 |
+
+### 確認手順
+
+1. `wrangler dev` 起動
+2. 近景写真を送信しセッション作成
+3. D1ローカルDBで `updated_at` が SQLite 形式（`"YYYY-MM-DD HH:MM:SS"`）になっていることを確認
+4. `wrangler dev --test-scheduled` で Cron を手動トリガー
+5. `updated_at` が1時間以上前のセッションが `step = 'timed_out'` に更新されることを確認
+6. 次のメッセージ送信でタイムアウトメッセージが返ることを確認
