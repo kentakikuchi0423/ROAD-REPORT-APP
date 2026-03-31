@@ -204,3 +204,17 @@ npx wrangler deploy --env=""
 ## 本番デプロイについて
 
 本番デプロイ前に `docs/checklist.md` のチェックリストを確認してください。
+
+---
+
+## このアプリができるまで
+
+このアプリの開発にあたり、最初に ChatGPT に入力したプロンプトを公開しています。
+
+- [最初の ChatGPT プロンプト](docs/initial_prompt.md)
+
+## このアプリができるまで
+
+このアプリの開発にあたり、最初に ChatGPT に入力したプロンプトを公開しています。
+
+- [最初の ChatGPT プロンプト](docs/initial_prompt.md)

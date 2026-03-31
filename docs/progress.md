@@ -821,14 +821,14 @@ LINE キャンセル確認フロー・管理画面 UI 統一・写真プレビ�
 
 ### 確認結果
 
-| ファイル | 状態 |
-|---|---|
-| `.dev.vars` | `.gitignore` 除外済み、コミット履歴なし ✅ |
-| `.env.example` | git 管理対象だがダミー値のみ ✅ |
-| `.dev.vars.example` | git 管理対象だがプレースホルダのみ ✅ |
-| `wrangler.toml` | シークレット値なし、`database_id` はダミー UUID ✅ |
-| `src/` ソースコード | ハードコードされたシークレットなし ✅ |
-| `docs/checklist.md` | `.dev.vars` 流用禁止の注意書きあり ✅ |
+| ファイル            | 状態                                               |
+| ------------------- | -------------------------------------------------- |
+| `.dev.vars`         | `.gitignore` 除外済み、コミット履歴なし ✅         |
+| `.env.example`      | git 管理対象だがダミー値のみ ✅                    |
+| `.dev.vars.example` | git 管理対象だがプレースホルダのみ ✅              |
+| `wrangler.toml`     | シークレット値なし、`database_id` はダミー UUID ✅ |
+| `src/` ソースコード | ハードコードされたシークレットなし ✅              |
+| `docs/checklist.md` | `.dev.vars` 流用禁止の注意書きあり ✅              |
 
 ### 修正内容
 
@@ -836,13 +836,13 @@ LINE キャンセル確認フロー・管理画面 UI 統一・写真プレビ�
 
 ### 本番公開前に再生成必須のシークレット一覧
 
-| シークレット | 再生成方法 |
-|---|---|
-| `LINE_CHANNEL_SECRET` | LINE Developers Console → チャンネル設定 → 再発行 |
-| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Developers Console → 長期トークン → 再発行 |
-| `ADMIN_PASSWORD_HASH` | 本番用パスワード決定後 `echo -n "newpass" \| sha256sum` |
-| `ADMIN_SESSION_SECRET` | `openssl rand -hex 32`（64 文字以上） |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare Dashboard → API Tokens → 現トークン無効化 → 新規発行 |
+| シークレット                | 再生成方法                                                      |
+| --------------------------- | --------------------------------------------------------------- |
+| `LINE_CHANNEL_SECRET`       | LINE Developers Console → チャンネル設定 → 再発行               |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Developers Console → 長期トークン → 再発行                 |
+| `ADMIN_PASSWORD_HASH`       | 本番用パスワード決定後 `echo -n "newpass" \| sha256sum`         |
+| `ADMIN_SESSION_SECRET`      | `openssl rand -hex 32`（64 文字以上）                           |
+| `CLOUDFLARE_API_TOKEN`      | Cloudflare Dashboard → API Tokens → 現トークン無効化 → 新規発行 |
 
 ### 指摘事項（次フェーズで対応）
 
@@ -876,15 +876,15 @@ LINE キャンセル確認フロー・管理画面 UI 統一・写真プレビ�
 
 ### 変更ファイル
 
-| ファイル | 種別 |
-|---|---|
-| `src/lib/constants.ts` | 新規作成 |
-| `src/app/admin/index.ts` | 更新 |
-| `src/app/admin/views.ts` | 更新 |
-| `src/app/index.ts` | 更新 |
-| `src/app/conversation.ts` | 更新 |
-| `tests/app/conversation.test.ts` | 更新 |
-| `tests/app/routing.test.ts` | 更新 |
+| ファイル                         | 種別     |
+| -------------------------------- | -------- |
+| `src/lib/constants.ts`           | 新規作成 |
+| `src/app/admin/index.ts`         | 更新     |
+| `src/app/admin/views.ts`         | 更新     |
+| `src/app/index.ts`               | 更新     |
+| `src/app/conversation.ts`        | 更新     |
+| `tests/app/conversation.test.ts` | 更新     |
+| `tests/app/routing.test.ts`      | 更新     |
 
 ### テスト結果
 
@@ -928,11 +928,11 @@ top-level 設定をそのまま本番に使用する方針を確定。
 
 ### 変更ファイル
 
-| ファイル | 種別 |
-|---|---|
-| `wrangler.toml` | 更新（コメント追記のみ、設定値変更なし） |
-| `docs/checklist.md` | 全面刷新 |
-| `docs/progress.md` | 本ステップ追記 |
+| ファイル            | 種別                                     |
+| ------------------- | ---------------------------------------- |
+| `wrangler.toml`     | 更新（コメント追記のみ、設定値変更なし） |
+| `docs/checklist.md` | 全面刷新                                 |
+| `docs/progress.md`  | 本ステップ追記                           |
 
 ### 次のステップ
 
@@ -970,13 +970,13 @@ top-level 設定をそのまま本番に使用する方針を確定。
 
 ### 変更ファイル
 
-| ファイル | 種別 |
-|---|---|
-| `src/lib/db.ts` | 更新 |
-| `src/app/conversation.ts` | 更新 |
-| `tests/lib/db.test.ts` | 更新 |
-| `tests/app/conversation.test.ts` | 更新 |
-| `docs/progress.md` | 本ステップ追記 |
+| ファイル                         | 種別           |
+| -------------------------------- | -------------- |
+| `src/lib/db.ts`                  | 更新           |
+| `src/app/conversation.ts`        | 更新           |
+| `tests/lib/db.test.ts`           | 更新           |
+| `tests/app/conversation.test.ts` | 更新           |
+| `docs/progress.md`               | 本ステップ追記 |
 
 ---
 
@@ -1019,13 +1019,13 @@ top-level 設定をそのまま本番に使用する方針を確定。
 
 ### 変更ファイル
 
-| ファイル | 種別 |
-|---|---|
-| `src/app/conversation.ts` | 更新 |
-| `tests/app/conversation.test.ts` | 更新 |
-| `tests/app/routing.test.ts` | 更新 |
-| `README.md` | 更新 |
-| `docs/progress.md` | 本ステップ追記 |
+| ファイル                         | 種別           |
+| -------------------------------- | -------------- |
+| `src/app/conversation.ts`        | 更新           |
+| `tests/app/conversation.test.ts` | 更新           |
+| `tests/app/routing.test.ts`      | 更新           |
+| `README.md`                      | 更新           |
+| `docs/progress.md`               | 本ステップ追記 |
 
 ---
 
@@ -1047,23 +1047,23 @@ top-level 設定をそのまま本番に使用する方針を確定。
 
 ### 設計判断
 
-| 項目 | 決定 |
-|---|---|
-| タイムアウト時間 | 1時間（現場での中断・電話割り込みを考慮）|
-| Cron 間隔 | 30分（精度・コストのバランス）|
-| タイムアウト方式 | 即削除ではなく `step = 'timed_out'` に更新し、次回メッセージ時に理由を伝えてから削除 |
-| `completed` ステップは対象外 | 二重送信防止の完了フラグを誤って上書きしないよう除外 |
+| 項目                         | 決定                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------ |
+| タイムアウト時間             | 1時間（現場での中断・電話割り込みを考慮）                                            |
+| Cron 間隔                    | 30分（精度・コストのバランス）                                                       |
+| タイムアウト方式             | 即削除ではなく `step = 'timed_out'` に更新し、次回メッセージ時に理由を伝えてから削除 |
+| `completed` ステップは対象外 | 二重送信防止の完了フラグを誤って上書きしないよう除外                                 |
 
 ### 変更ファイル
 
-| ファイル | 種別 |
-|---|---|
-| `src/types.ts` | 更新 |
-| `src/lib/db.ts` | 更新 |
-| `src/app/conversation.ts` | 更新 |
-| `src/app/index.ts` | 更新 |
-| `wrangler.toml` | 更新 |
-| `docs/progress.md` | 本ステップ追記 |
+| ファイル                  | 種別           |
+| ------------------------- | -------------- |
+| `src/types.ts`            | 更新           |
+| `src/lib/db.ts`           | 更新           |
+| `src/app/conversation.ts` | 更新           |
+| `src/app/index.ts`        | 更新           |
+| `wrangler.toml`           | 更新           |
+| `docs/progress.md`        | 本ステップ追記 |
 
 ---
 
@@ -1080,8 +1080,8 @@ top-level 設定をそのまま本番に使用する方針を確定。
 `markTimedOutSessions()` の比較が SQLite の `datetime('now')` 形式を使っているため、
 フォーマット不一致により比較が常に false になっていた。
 
-| 格納値（upsertSession） | 比較値（markTimedOutSessions） |
-|---|---|
+| 格納値（upsertSession）                 | 比較値（markTimedOutSessions）            |
+| --------------------------------------- | ----------------------------------------- |
 | `"2024-01-01T10:00:00.000Z"` (ISO 8601) | `"2024-01-01 09:00:00"` (SQLite datetime) |
 
 SQLite は文字列比較を行うため、10文字目の `'T'`(ASCII 84) > `' '`(ASCII 32) となり、
@@ -1095,10 +1095,10 @@ JavaScript バインドから SQLite の `datetime('now')` に変更。
 
 ### 変更ファイル
 
-| ファイル | 種別 |
-|---|---|
-| `src/lib/db.ts` | バグ修正（`upsertSession` の `updated_at` 保存形式を SQLite 形式に統一）|
-| `docs/progress.md` | 本ステップ追記 |
+| ファイル           | 種別                                                                     |
+| ------------------ | ------------------------------------------------------------------------ |
+| `src/lib/db.ts`    | バグ修正（`upsertSession` の `updated_at` 保存形式を SQLite 形式に統一） |
+| `docs/progress.md` | 本ステップ追記                                                           |
 
 ### 確認手順
 
